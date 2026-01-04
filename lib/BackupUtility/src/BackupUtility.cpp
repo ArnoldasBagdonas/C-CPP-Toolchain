@@ -253,16 +253,22 @@ static fs::path CreateSnapshotDir(const fs::path& historyRootPath)
  */
 static fs::path CreateSnapshotOnce(const fs::path& historyRootPath)
 {
+    // Works correctly if multiple tests (or threads) create backups in different historyRootPath's.
+    
     static std::mutex snapshotMutex;
-    static fs::path snapshotPath;
-    static bool snapshotCreated = false;
+    static std::unordered_map<std::string, fs::path> snapshotsCreated;
 
     std::lock_guard lock(snapshotMutex);
-    if (!snapshotCreated)
+
+    const std::string key = historyRootPath.string();
+    auto it = snapshotsCreated.find(key);
+    if (it != snapshotsCreated.end())
     {
-        snapshotPath = CreateSnapshotDir(historyRootPath);
-        snapshotCreated = true;
+        return it->second;
     }
+
+    fs::path snapshotPath = CreateSnapshotDir(historyRootPath);
+    snapshotsCreated[key] = snapshotPath;
     return snapshotPath;
 }
 
