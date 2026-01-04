@@ -28,7 +28,7 @@ include(cmake/compiler_flags.cmake)
 # ----------------------------------------------------------------------------- 
 # Third-party dependencies
 # ----------------------------------------------------------------------------- 
-# Prefer subdirectories over FetchContent when possible for reproducibility
+# Prefer subdirectories over FetchContent when possible for reproducibility and build speed
 add_subdirectory(third_party)
 
 # ----------------------------------------------------------------------------- 
