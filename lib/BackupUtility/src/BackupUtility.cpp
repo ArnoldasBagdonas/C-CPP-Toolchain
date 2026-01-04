@@ -531,6 +531,7 @@ bool RunBackup(const BackupConfig& config)
     };
 
     // Stream files from directory or single file
+    fs::path actualSourceRootPath = sourceFolderPath;
     if (fs::is_directory(sourceFolderPath))
     {
         for (auto& entry : fs::recursive_directory_iterator(sourceFolderPath, errorCode))
@@ -541,7 +542,9 @@ bool RunBackup(const BackupConfig& config)
     }
     else if (fs::is_regular_file(sourceFolderPath))
     {
-        enqueueFile(sourceFolderPath); // single file works exactly the same
+        enqueueFile(sourceFolderPath);
+        // Use parent directory as root for deletion detection
+        actualSourceRootPath = sourceFolderPath.parent_path();
     }
     else
     {
@@ -561,7 +564,7 @@ bool RunBackup(const BackupConfig& config)
 
     if (operationSucceeded)
     {
-        if (!DetectDeletedFiles(sql, sourceFolderPath, backupFolderPath, historyFolderPath, threadSafeProgress, CreateSnapshotOnce))
+        if (!DetectDeletedFiles(sql, actualSourceRootPath, backupFolderPath, historyFolderPath, threadSafeProgress, CreateSnapshotOnce))
         {
             operationSucceeded = false;
         }
