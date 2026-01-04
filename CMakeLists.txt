@@ -31,31 +31,6 @@ include(cmake/compiler_flags.cmake)
 # Prefer subdirectories over FetchContent when possible for reproducibility
 add_subdirectory(third_party)
 
-include(FetchContent)
-
-set(FETCHCONTENT_QUIET OFF)
-
-# --- cxxopts (header-only, v3.3.1) ---
-FetchContent_Declare(
-    cxxopts
-    URL https://github.com/jarro2783/cxxopts/archive/refs/tags/v3.3.1.tar.gz
-)
-FetchContent_MakeAvailable(cxxopts)
-
-# --- xxHash (v0.8.3) ---
-FetchContent_Declare(
-    xxhash
-    URL https://github.com/Cyan4973/xxHash/archive/refs/tags/v0.8.3.tar.gz
-)
-FetchContent_MakeAvailable(xxhash)
-
-add_library(xxhash_static STATIC ${xxhash_SOURCE_DIR}/xxhash.c)
-set_target_flags(xxhash_static)
-target_include_directories(xxhash_static
-    PUBLIC
-        ${xxhash_SOURCE_DIR}
-)
-
 # ----------------------------------------------------------------------------- 
 # Core library
 # ----------------------------------------------------------------------------- 
