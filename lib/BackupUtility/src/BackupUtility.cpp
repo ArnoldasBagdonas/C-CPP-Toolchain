@@ -517,17 +517,10 @@ bool RunBackup(const BackupConfig& config)
 
     if (nullptr != database)
     {
-        if (operationSucceeded)
-        {
-            sqlite3_exec(database, "COMMIT;", nullptr, nullptr, nullptr);
-        }
-        else
-        {
-            sqlite3_exec(database, "COMMIT;", nullptr, nullptr, nullptr);
-            //TODO: Rollback funtionality has to be defined and implemented later.
-            //sqlite3_exec(database, "ROLLBACK;", nullptr, nullptr, nullptr);
-        }
+        //TODO: Rollback functionality has to be defined and implemented later.
+        //sqlite3_exec(database, "ROLLBACK;", nullptr, nullptr, nullptr);
 
+        sqlite3_exec(database, "COMMIT;", nullptr, nullptr, nullptr);
         CloseDatabase(database);
     }
 
