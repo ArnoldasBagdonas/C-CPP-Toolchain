@@ -40,11 +40,12 @@ inline std::vector<std::string> ListDirectory(const fs::path& dir)
 // Helper to normalize Linux / Windows path symbols
 inline std::vector<std::string> NormalizePaths(const std::vector<std::string>& paths)
 {
-    std::vector<std::string> result;
+    std::vector<std::string> normalized;
     for (const auto& p : paths)
     {
-        fs::path pathObj(p);
-        result.push_back(pathObj.generic_string()); // converts separator to '/'
+        std::string s = p;
+        std::replace(s.begin(), s.end(), '\\', '/'); // convert Windows backslash to slash
+        normalized.push_back(s);
     }
-    return result;
+    return normalized;
 }

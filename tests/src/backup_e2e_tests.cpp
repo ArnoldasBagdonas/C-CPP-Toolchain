@@ -62,7 +62,8 @@ class E2ERunBackupTest : public ::testing::Test
 
     void ExpectBackupContents(const fs::path& dir, std::initializer_list<std::string> expected)
     {
-        auto contents = GetDirectoryContents(dir); // std::vector<std::string>
+        auto rawContents = GetDirectoryContents(dir); // returns vector<fs::path> or vector<string>
+        auto contents = NormalizePaths(rawContents);   // normalize all paths to /
         EXPECT_THAT(contents, testing::UnorderedElementsAreArray(expected)) << "Backup contents mismatch in " << dir;
     }
 };
