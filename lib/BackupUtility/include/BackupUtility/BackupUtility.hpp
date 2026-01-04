@@ -30,7 +30,6 @@ struct BackupConfig
     fs::path backupRoot;
     fs::path databaseFile;
 
-    bool dryRun  = false;
     bool verbose = false;
 
     std::function<void(const BackupProgress&)> onProgress;

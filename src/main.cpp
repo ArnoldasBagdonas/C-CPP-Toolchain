@@ -17,7 +17,6 @@ int main(int argc, char* argv[])
     options.add_options()
         ("s,source",  "Source directory", cxxopts::value<std::string>())
         ("b,backup",  "Backup directory", cxxopts::value<std::string>())
-        ("d,dry-run", "Dry run only")
         ("v,verbose", "Verbose output")
         ("h,help",    "Print help");
     
@@ -36,7 +35,6 @@ int main(int argc, char* argv[])
     cfg.sourceDir = fs::path(result["source"].as<std::string>());
     cfg.backupRoot = fs::path(result["backup"].as<std::string>());
     cfg.verbose = result.count("verbose") > 0;
-    cfg.dryRun = result.count("dry-run") > 0;
 
     // Database is always fixed inside backup folder
     cfg.databaseFile = cfg.backupRoot / "backup.db";

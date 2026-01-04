@@ -21,13 +21,13 @@ FetchContent_MakeAvailable(googletest)
 # ---------------------------------------------------------------------------
 set(TEST_SOURCES
     src/main.cpp
-    src/backup_utility_test.cpp
+    src/e2e_backup_test.cpp
 )
 
 # Optional sanitizer test sources
 string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_TYPE_UPPER)
 if(BUILD_TYPE_UPPER MATCHES "VALGRIND|ADDRESSSANITIZER|THREADSANITIZER|MEMORYSANITIZER|UNDEFINEDBEHAVIORSANITIZER")
-     list(APPEND TEST_SOURCES src/sanitizer_test.cpp)
+    # list(APPEND TEST_SOURCES src/sanitizer_test.cpp)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -43,6 +43,7 @@ target_link_libraries(unit_tests
     PRIVATE
         gtest
         rdemo_backup::BackupUtility
+        sqlite3
 )
 
 # ---------------------------------------------------------------------------

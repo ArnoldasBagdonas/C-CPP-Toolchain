@@ -185,16 +185,9 @@ static fs::path EnsureSnapshot(fs::path& snapshot, bool& snapshotCreated, const 
    File processing
    ========================= */
 
-static void ProcessFile(const fs::path& abs,
-                        const fs::path& sourceRoot,
-                        const fs::path& currentDir,
-                        sqlite3* db,
-                        fs::path& snapshot,
-                        bool& snapshotCreated,
+static void ProcessFile(const fs::path& abs, const fs::path& sourceRoot, const fs::path& currentDir, sqlite3* db, fs::path& snapshot, bool& snapshotCreated,
                         const fs::path& historyDir, // pass central historyDir
-                        bool dryRun,
-                        std::function<void(const BackupProgress&)> onProgress,
-                        std::size_t& processed)
+                        std::function<void(const BackupProgress&)> onProgress, std::size_t& processed)
 {
     std::error_code ec;
     fs::path rel = fs::relative(abs, sourceRoot, ec);
@@ -215,36 +208,29 @@ static void ProcessFile(const fs::path& abs,
         EnsureSnapshot(snapshot, snapshotCreated, historyDir);
         fs::path archived = snapshot / rel;
         fs::create_directories(archived.parent_path(), ec);
-        if (!dryRun)
-            fs::copy_file(currentFile, archived, fs::copy_options::overwrite_existing, ec);
+        fs::copy_file(currentFile, archived, fs::copy_options::overwrite_existing, ec);
     }
 
     ChangeType newStatus;
     if (!hadOld)
     {
         newStatus = ChangeType::Added;
-        if (!dryRun)
-        {
-            fs::create_directories(currentFile.parent_path(), ec);
-            fs::copy_file(abs, currentFile, fs::copy_options::overwrite_existing, ec);
-        }
+        fs::create_directories(currentFile.parent_path(), ec);
+        fs::copy_file(abs, currentFile, fs::copy_options::overwrite_existing, ec);
     }
     else if (changed)
     {
         newStatus = ChangeType::Modified;
-        if (!dryRun)
-        {
-            EnsureSnapshot(snapshot, snapshotCreated, currentDir.parent_path() / "history");
-            fs::path archived = snapshot / rel;
-            fs::create_directories(archived.parent_path(), ec);
-            fs::copy_file(currentFile, archived, fs::copy_options::overwrite_existing, ec);
-            fs::copy_file(abs, currentFile, fs::copy_options::overwrite_existing, ec);
-        }
+        EnsureSnapshot(snapshot, snapshotCreated, currentDir.parent_path() / "history");
+        fs::path archived = snapshot / rel;
+        fs::create_directories(archived.parent_path(), ec);
+        fs::copy_file(currentFile, archived, fs::copy_options::overwrite_existing, ec);
+        fs::copy_file(abs, currentFile, fs::copy_options::overwrite_existing, ec);
     }
     else
         newStatus = ChangeType::Unchanged;
 
-    if ((db) && (!dryRun))
+    if (db)
     {
         std::string ts;
         if (newStatus != ChangeType::Unchanged)
@@ -262,14 +248,9 @@ static void ProcessFile(const fs::path& abs,
 /* =========================
    Deleted files detection helper
    ========================= */
-inline void DetectDeletedFiles(sqlite3* db,
-                               const fs::path& sourceDir,
-                               const fs::path& currentDir,
+inline void DetectDeletedFiles(sqlite3* db, const fs::path& sourceDir, const fs::path& currentDir,
                                const fs::path& historyDir, // central historyDir
-                               fs::path& snapshot,
-                               bool& snapshotCreated,
-                               bool dryRun,
-                               std::function<void(const BackupProgress&)> onProgress)
+                               fs::path& snapshot, bool& snapshotCreated, std::function<void(const BackupProgress&)> onProgress)
 {
     std::error_code ec;
     if (!db)
@@ -303,7 +284,7 @@ inline void DetectDeletedFiles(sqlite3* db,
             EnsureSnapshot(snapshot, snapshotCreated, historyDir);
 
             // Archive deleted file
-            if (fs::exists(currentFile, ec) && !dryRun)
+            if (fs::exists(currentFile, ec))
             {
                 fs::path archived = snapshot / dbPath;
                 fs::create_directories(archived.parent_path(), ec);
@@ -311,14 +292,11 @@ inline void DetectDeletedFiles(sqlite3* db,
             }
 
             // Remove current file
-            if (!dryRun)
-                fs::remove(currentFile, ec);
+            fs::remove(currentFile, ec);
 
             // Update DB: mark as deleted and update timestamp
             sqlite3_stmt* delStmt = nullptr;
-            if (sqlite3_prepare_v2(db,
-                                   "UPDATE files SET status=?1, last_updated=?2 WHERE path=?3;",
-                                   -1, &delStmt, nullptr) == SQLITE_OK)
+            if (sqlite3_prepare_v2(db, "UPDATE files SET status=?1, last_updated=?2 WHERE path=?3;", -1, &delStmt, nullptr) == SQLITE_OK)
             {
                 sqlite3_bind_text(delStmt, 1, ChangeTypeToString(ChangeType::Deleted), -1, SQLITE_TRANSIENT);
                 sqlite3_bind_text(delStmt, 2, GetCurrentTimestamp().c_str(), -1, SQLITE_TRANSIENT);
@@ -335,7 +313,6 @@ inline void DetectDeletedFiles(sqlite3* db,
 
     sqlite3_finalize(stmt);
 }
-
 
 /* =========================
    Main backup logic
@@ -369,7 +346,7 @@ bool RunBackup(const BackupConfig& cfg)
 
     if (fs::is_regular_file(cfg.sourceDir, ec))
     {
-        ProcessFile(cfg.sourceDir, cfg.sourceDir.parent_path(), currentDir, db, snapshot, snapshotCreated, historyDir, cfg.dryRun, cfg.onProgress, processed);
+        ProcessFile(cfg.sourceDir, cfg.sourceDir.parent_path(), currentDir, db, snapshot, snapshotCreated, historyDir, cfg.onProgress, processed);
     }
     else if (fs::is_directory(cfg.sourceDir, ec))
     {
@@ -377,7 +354,7 @@ bool RunBackup(const BackupConfig& cfg)
         {
             if (!ec && entry.is_regular_file())
             {
-                ProcessFile(entry.path(), cfg.sourceDir, currentDir, db, snapshot, snapshotCreated, historyDir, cfg.dryRun, cfg.onProgress, processed);
+                ProcessFile(entry.path(), cfg.sourceDir, currentDir, db, snapshot, snapshotCreated, historyDir, cfg.onProgress, processed);
             }
         }
     }
@@ -386,7 +363,7 @@ bool RunBackup(const BackupConfig& cfg)
         return false;
     }
 
-    DetectDeletedFiles(db, cfg.sourceDir, currentDir, historyDir, snapshot, snapshotCreated, cfg.dryRun, cfg.onProgress);
+    DetectDeletedFiles(db, cfg.sourceDir, currentDir, historyDir, snapshot, snapshotCreated, cfg.onProgress);
 
     if (db)
     {
