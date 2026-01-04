@@ -60,6 +60,12 @@ class E2ERunBackupTest : public ::testing::Test
         buffer << ifs.rdbuf();
         return buffer.str();
     }
+
+    void ExpectBackupContents(const fs::path& dir, std::initializer_list<std::string> expected)
+    {
+        auto contents = NormalizePaths(GetDirectoryContents(dir));
+        EXPECT_THAT(contents, testing::UnorderedElementsAreArray(expected)) << "Backup contents mismatch in " << dir;
+    }
 };
 
 /* ============================================================================
@@ -82,15 +88,11 @@ TEST_F(E2ERunBackupTest, RunBackup_WithNonExistentSource_ReturnsFalse)
 
     fs::path liveBackupDir = backupRoot / "backup";
     if (fs::exists(liveBackupDir))
-    {
-        EXPECT_TRUE(GetDirectoryContents(liveBackupDir).empty()) << "No files should be backed up when source does not exist.";
-    }
+        ExpectBackupContents(liveBackupDir, {});
 
     fs::path deletedDir = backupRoot / "deleted";
     if (fs::exists(deletedDir))
-    {
-        EXPECT_TRUE(GetDirectoryContents(deletedDir).empty()) << "No deleted snapshots should be created on failure.";
-    }
+        ExpectBackupContents(deletedDir, {});
 }
 
 TEST_F(E2ERunBackupTest, RunBackup_WithEmptySource_CreatesEmptyBackup)
@@ -108,12 +110,12 @@ TEST_F(E2ERunBackupTest, RunBackup_WithEmptySource_CreatesEmptyBackup)
     ASSERT_TRUE(result) << "Backup should succeed for empty source directory";
 
     fs::path liveBackupDir = backupRoot / "backup";
-    ASSERT_TRUE(fs::exists(liveBackupDir)) << "Backup directory should exist";
-    EXPECT_TRUE(GetDirectoryContents(liveBackupDir).empty()) << "Backup directory should be empty for empty source";
+    ASSERT_TRUE(fs::exists(liveBackupDir));
+    ExpectBackupContents(liveBackupDir, {});
 
     fs::path deletedDir = backupRoot / "deleted";
-    ASSERT_TRUE(fs::exists(deletedDir)) << "Deleted directory should exist";
-    EXPECT_TRUE(GetDirectoryContents(deletedDir).empty()) << "Deleted directory should be empty for empty source";
+    ASSERT_TRUE(fs::exists(deletedDir));
+    ExpectBackupContents(deletedDir, {});
 
     ASSERT_TRUE(fs::exists(dbPath)) << "Database file should be created even for empty backup";
 }
@@ -134,27 +136,23 @@ TEST_F(E2ERunBackupTest, RunBackup_InitialBackup_CopiesAllFiles)
     cfg.databaseFile = dbPath;
 
     // Act
-    ASSERT_TRUE(RunBackup(cfg)) << "Initial backup should succeed";
+    bool result = RunBackup(cfg);
 
     // Assert
+    ASSERT_TRUE(result) << "Initial backup should succeed";
     fs::path liveBackupDir = backupRoot / "backup";
-    ASSERT_TRUE(fs::exists(liveBackupDir)) << "Backup directory must exist";
+    ASSERT_TRUE(fs::exists(liveBackupDir));
 
-    EXPECT_TRUE(fs::exists(liveBackupDir / "file1.txt")) << "File1 should exist in backup";
-    EXPECT_TRUE(fs::exists(liveBackupDir / "subdir/file2.txt")) << "File2 should exist in backup";
+    // Check both files and folder exist
+    ExpectBackupContents(liveBackupDir, {"file1.txt", "subdir", "subdir/file2.txt"});
 
+    // Check file contents
     EXPECT_EQ(readFile(liveBackupDir / "file1.txt"), "content1");
     EXPECT_EQ(readFile(liveBackupDir / "subdir/file2.txt"), "content2");
 
-    auto backupContentsRaw = GetDirectoryContents(liveBackupDir);
-    auto backupContents = NormalizePaths(backupContentsRaw);
-
-    EXPECT_THAT(backupContents, testing::UnorderedElementsAre("file1.txt", "subdir", "subdir/file2.txt"))
-        << "Backup directory should contain all expected files and subdirectories";
-
     fs::path deletedDir = backupRoot / "deleted";
-    EXPECT_TRUE(fs::exists(deletedDir)) << "Deleted directory should always exist";
-    EXPECT_TRUE(GetDirectoryContents(deletedDir).empty()) << "Deleted directory should be empty after initial backup";
+    ASSERT_TRUE(fs::exists(deletedDir));
+    ExpectBackupContents(deletedDir, {});
 }
 
 /* ============================================================================
@@ -180,24 +178,23 @@ TEST_F(E2ERunBackupTest, RunBackup_IncrementalBackup_TracksChanges)
     fs::remove(sourceDir / "file2.txt");
 
     // Act
-    ASSERT_TRUE(RunBackup(cfg)) << "Incremental backup should succeed";
+    bool result = RunBackup(cfg);
 
-    // Assert: live backup state
+    // Assert
+    ASSERT_TRUE(result) << "Incremental backup should succeed";
+
     fs::path liveBackupDir = backupRoot / "backup";
+    ExpectBackupContents(liveBackupDir, {"file1.txt", "file3.txt"});
+
     EXPECT_EQ(readFile(liveBackupDir / "file1.txt"), "modified content");
     EXPECT_EQ(readFile(liveBackupDir / "file3.txt"), "new file");
-    EXPECT_FALSE(fs::exists(liveBackupDir / "file2.txt")) << "Deleted file should not exist in live backup";
 
-    // Assert: deleted snapshot
     fs::path deletedDir = backupRoot / "deleted";
     auto snapshots = ListDirectory(deletedDir);
-    ASSERT_THAT(snapshots, testing::SizeIs(1)) << "There should be exactly one snapshot";
+    ASSERT_THAT(snapshots, testing::SizeIs(1));
 
     fs::path snapshotDir = deletedDir / snapshots[0];
-    auto snapshotContents = GetDirectoryContents(snapshotDir);
-
-    EXPECT_THAT(snapshotContents, testing::UnorderedElementsAre("file1.txt", "file2.txt"))
-        << "Deleted snapshot should contain previous versions of changed/deleted files";
+    ExpectBackupContents(snapshotDir, {"file1.txt", "file2.txt"});
 
     EXPECT_EQ(readFile(snapshotDir / "file1.txt"), "content1");
     EXPECT_EQ(readFile(snapshotDir / "file2.txt"), "content2");
@@ -229,15 +226,16 @@ TEST_F(E2ERunBackupTest, RunBackup_UnchangedFile_IsNotModified)
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
     // Act: second backup (no changes)
-    ASSERT_TRUE(RunBackup(cfg)) << "Second backup with no changes should succeed";
-
-    auto newTime = fs::last_write_time(backupFile);
+    bool result = RunBackup(cfg);
 
     // Assert
+    ASSERT_TRUE(result) << "Second backup with no changes should succeed";
+
+    auto newTime = fs::last_write_time(backupFile);
     EXPECT_EQ(originalTime, newTime) << "Unchanged file should not be rewritten";
 
     fs::path deletedDir = backupRoot / "deleted";
-    EXPECT_TRUE(GetDirectoryContents(deletedDir).empty()) << "Deleted directory should remain empty for unchanged files";
+    ExpectBackupContents(deletedDir, {});
 }
 
 /* ============================================================================
@@ -256,11 +254,13 @@ TEST_F(E2ERunBackupTest, RunBackup_SingleFileSource_CreatesBackupFile)
     cfg.databaseFile = dbPath;
 
     // Act
-    ASSERT_TRUE(RunBackup(cfg)) << "Backup of a single file should succeed";
+    bool result = RunBackup(cfg);
 
     // Assert
+    ASSERT_TRUE(result) << "Backup of a single file should succeed";
+
     fs::path backupFile = backupRoot / "backup/single.txt";
-    ASSERT_TRUE(fs::exists(backupFile)) << "Backup file must exist for single file source";
+    ExpectBackupContents(backupRoot / "backup", {"single.txt"});
     EXPECT_EQ(readFile(backupFile), "single file content");
 }
 
@@ -285,16 +285,22 @@ TEST_F(E2ERunBackupTest, RunBackup_AlreadyDeletedFile_IsNotArchivedAgain)
     ASSERT_TRUE(RunBackup(cfg)) << "First deletion backup should succeed";
 
     // Act: run backup again after file already deleted
-    ASSERT_TRUE(RunBackup(cfg)) << "Second backup should succeed and ignore already deleted files";
+    bool result = RunBackup(cfg);
 
     // Assert
+    ASSERT_TRUE(result) << "Second backup should succeed and ignore already deleted files";
+
+    // Check snapshots
     fs::path deletedDir = backupRoot / "deleted";
     auto snapshots = ListDirectory(deletedDir);
     ASSERT_THAT(snapshots, testing::SizeIs(1)) << "Only one snapshot directory should exist";
 
     fs::path snapshotDir = deletedDir / snapshots[0];
-    EXPECT_TRUE(fs::is_directory(snapshotDir)) << "Snapshot must be a directory";
+    ASSERT_TRUE(fs::is_directory(snapshotDir)) << "Snapshot must be a directory";
+    ExpectBackupContents(snapshotDir, {"file.txt"}); // Snapshot contains deleted file
 
-    auto snapshotContents = GetDirectoryContents(snapshotDir);
-    EXPECT_THAT(snapshotContents, testing::ElementsAre("file.txt")) << "Snapshot should contain the deleted file exactly once";
+    // Check live backup directory is empty
+    fs::path liveBackupDir = backupRoot / "backup";
+    ASSERT_TRUE(fs::exists(liveBackupDir)) << "Live backup directory must exist";
+    ExpectBackupContents(liveBackupDir, {}); // Live backup should have no files
 }
