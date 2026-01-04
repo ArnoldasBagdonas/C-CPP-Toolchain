@@ -13,35 +13,6 @@
 
 namespace fs = std::filesystem;
 
-inline const char* ChangeTypeToString(ChangeType type)
-{
-    switch (type)
-    {
-    case ChangeType::Unchanged:
-        return "Unchanged";
-    case ChangeType::Added:
-        return "Added";
-    case ChangeType::Modified:
-        return "Modified";
-    case ChangeType::Deleted:
-        return "Deleted";
-    }
-    return "Unknown";
-}
-
-inline ChangeType StringToChangeType(const std::string& s)
-{
-    if (s == "Unchanged")
-        return ChangeType::Unchanged;
-    if (s == "Added")
-        return ChangeType::Added;
-    if (s == "Modified")
-        return ChangeType::Modified;
-    if (s == "Deleted")
-        return ChangeType::Deleted;
-    return ChangeType::Unchanged;
-}
-
 /* =========================
    Database helpers
    ========================= */
@@ -185,7 +156,7 @@ static fs::path EnsureSnapshot(fs::path& snapshot, bool& snapshotCreated, const 
    File processing
    ========================= */
 
-static void ProcessFile(const fs::path& abs, const fs::path& sourceRoot, const fs::path& currentDir, sqlite3* db, fs::path& snapshot, bool& snapshotCreated,
+static bool ProcessFile(const fs::path& abs, const fs::path& sourceRoot, const fs::path& currentDir, sqlite3* db, fs::path& snapshot, bool& snapshotCreated,
                         const fs::path& historyDir, // pass central historyDir
                         std::function<void(const BackupProgress&)> onProgress, std::size_t& processed)
 {
@@ -195,7 +166,7 @@ static void ProcessFile(const fs::path& abs, const fs::path& sourceRoot, const f
 
     std::string newHash;
     if (!HashFile(abs, newHash))
-        return;
+        return false;
 
     std::string oldHash;
     ChangeType oldStatus;
@@ -238,28 +209,32 @@ static void ProcessFile(const fs::path& abs, const fs::path& sourceRoot, const f
         else
             ts = oldTimestamp;
 
-        UpdateStoredFileState(db, rel.string(), newHash, newStatus, ts);
+        if (!UpdateStoredFileState(db, rel.string(), newHash, newStatus, ts))
+            return false;
     }
 
     if (onProgress)
         onProgress({"collecting", ++processed, 0, abs});
+
+    return true;
 }
 
 /* =========================
    Deleted files detection helper
    ========================= */
-inline void DetectDeletedFiles(sqlite3* db, const fs::path& sourceDir, const fs::path& currentDir,
+inline bool DetectDeletedFiles(sqlite3* db, const fs::path& sourceDir, const fs::path& currentDir,
                                const fs::path& historyDir, // central historyDir
                                fs::path& snapshot, bool& snapshotCreated, std::function<void(const BackupProgress&)> onProgress)
 {
     std::error_code ec;
     if (!db)
-        return;
+        return true; // Nothing to do
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, "SELECT path, status FROM files;", -1, &stmt, nullptr) != SQLITE_OK)
-        return;
+        return false;
 
+    bool result = true;
     while (sqlite3_step(stmt) == SQLITE_ROW)
     {
         const char* dbPathCStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
@@ -296,12 +271,21 @@ inline void DetectDeletedFiles(sqlite3* db, const fs::path& sourceDir, const fs:
 
             // Update DB: mark as deleted and update timestamp
             sqlite3_stmt* delStmt = nullptr;
-            if (sqlite3_prepare_v2(db, "UPDATE files SET status=?1, last_updated=?2 WHERE path=?3;", -1, &delStmt, nullptr) == SQLITE_OK)
+            if (sqlite3_prepare_v2(db, "UPDATE files SET status=?1, last_updated=?2 WHERE path=?3;", -1, &delStmt, nullptr) != SQLITE_OK)
             {
-                sqlite3_bind_text(delStmt, 1, ChangeTypeToString(ChangeType::Deleted), -1, SQLITE_TRANSIENT);
-                sqlite3_bind_text(delStmt, 2, GetCurrentTimestamp().c_str(), -1, SQLITE_TRANSIENT);
-                sqlite3_bind_text(delStmt, 3, dbPath.c_str(), -1, SQLITE_TRANSIENT);
-                sqlite3_step(delStmt);
+                result = false;
+                break; 
+            }
+            
+            sqlite3_bind_text(delStmt, 1, ChangeTypeToString(ChangeType::Deleted), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(delStmt, 2, GetCurrentTimestamp().c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(delStmt, 3, dbPath.c_str(), -1, SQLITE_TRANSIENT);
+            
+            if (sqlite3_step(delStmt) != SQLITE_DONE)
+            {
+                sqlite3_finalize(delStmt);
+                result = false;
+                break;
             }
             sqlite3_finalize(delStmt);
 
@@ -312,6 +296,7 @@ inline void DetectDeletedFiles(sqlite3* db, const fs::path& sourceDir, const fs:
     }
 
     sqlite3_finalize(stmt);
+    return result;
 }
 
 /* =========================
@@ -340,13 +325,17 @@ bool RunBackup(const BackupConfig& cfg)
 
     sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
 
+    bool success = true;
     fs::path snapshot;
     bool snapshotCreated = false;
     std::size_t processed = 0;
 
+    const fs::path effectiveSourceRoot = fs::is_directory(cfg.sourceDir, ec) ? cfg.sourceDir : cfg.sourceDir.parent_path();
+
     if (fs::is_regular_file(cfg.sourceDir, ec))
     {
-        ProcessFile(cfg.sourceDir, cfg.sourceDir.parent_path(), currentDir, db, snapshot, snapshotCreated, historyDir, cfg.onProgress, processed);
+        if (!ProcessFile(cfg.sourceDir, effectiveSourceRoot, currentDir, db, snapshot, snapshotCreated, historyDir, cfg.onProgress, processed))
+            success = false;
     }
     else if (fs::is_directory(cfg.sourceDir, ec))
     {
@@ -354,22 +343,34 @@ bool RunBackup(const BackupConfig& cfg)
         {
             if (!ec && entry.is_regular_file())
             {
-                ProcessFile(entry.path(), cfg.sourceDir, currentDir, db, snapshot, snapshotCreated, historyDir, cfg.onProgress, processed);
+                if (!ProcessFile(entry.path(), effectiveSourceRoot, currentDir, db, snapshot, snapshotCreated, historyDir, cfg.onProgress, processed))
+                {
+                    success = false;
+                    break;
+                }
             }
         }
     }
     else
     {
-        return false;
+        success = false;
     }
 
-    DetectDeletedFiles(db, cfg.sourceDir, currentDir, historyDir, snapshot, snapshotCreated, cfg.onProgress);
+    if (success)
+    {
+        if (!DetectDeletedFiles(db, effectiveSourceRoot, currentDir, historyDir, snapshot, snapshotCreated, cfg.onProgress))
+            success = false;
+    }
 
     if (db)
     {
-        sqlite3_exec(db, "COMMIT;", nullptr, nullptr, nullptr);
+        if(success)
+            sqlite3_exec(db, "COMMIT;", nullptr, nullptr, nullptr);
+        else
+            sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
+
         CloseDatabase(db);
     }
 
-    return true;
+    return success;
 }

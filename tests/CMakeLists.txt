@@ -21,7 +21,9 @@ FetchContent_MakeAvailable(googletest)
 # ---------------------------------------------------------------------------
 set(TEST_SOURCES
     src/main.cpp
-    src/e2e_backup_test.cpp
+    src/backup_lifecycle_test.cpp
+    src/backup_extended_tests.cpp
+    src/backup_change_type_test.cpp
 )
 
 # Optional sanitizer test sources
@@ -35,15 +37,21 @@ endif()
 # ---------------------------------------------------------------------------
 add_executable(unit_tests ${TEST_SOURCES})
 
+target_include_directories(unit_tests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 # Apply target-specific compiler/linker flags (defined in root CMake)
 set_target_flags(unit_tests)
 
 # Link dependencies
 target_link_libraries(unit_tests
     PRIVATE
-        gtest
+        gmock
         rdemo_backup::BackupUtility
         sqlite3
+        xxhash_static
 )
 
 # ---------------------------------------------------------------------------

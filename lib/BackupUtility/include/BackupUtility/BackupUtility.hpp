@@ -16,6 +16,35 @@ enum class ChangeType
     Deleted
 };
 
+inline const char* ChangeTypeToString(ChangeType type)
+{
+    switch (type)
+    {
+    case ChangeType::Unchanged:
+        return "Unchanged";
+    case ChangeType::Added:
+        return "Added";
+    case ChangeType::Modified:
+        return "Modified";
+    case ChangeType::Deleted:
+        return "Deleted";
+    }
+    return "Unknown";
+}
+
+inline ChangeType StringToChangeType(const std::string& s)
+{
+    if (s == "Unchanged")
+        return ChangeType::Unchanged;
+    if (s == "Added")
+        return ChangeType::Added;
+    if (s == "Modified")
+        return ChangeType::Modified;
+    if (s == "Deleted")
+        return ChangeType::Deleted;
+    return ChangeType::Unchanged;
+}
+
 struct BackupProgress
 {
     const char* stage;
