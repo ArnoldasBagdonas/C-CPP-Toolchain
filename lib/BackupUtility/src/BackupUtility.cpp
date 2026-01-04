@@ -1,13 +1,20 @@
 // file BackupUtility.cpp:
 
 #include "BackupUtility/BackupUtility.hpp"
+#include "BackupUtility/SQLiteSession.hpp"
 
+#include <atomic>
+#include <condition_variable>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <mutex>
+#include <queue>
 #include <sstream>
+#include <thread>
+#include <unordered_map>
+#include <vector>
 
 #include <sqlite3.h>
 #include <xxhash.h>
@@ -242,68 +249,43 @@ static fs::path CreateSnapshotDir(const fs::path& historyRootPath)
 }
 
 /**
- * @brief Ensure snapshot directory exists, creating it on first invocation.
- *
- * Lazy initialization pattern for snapshot creation.
- *
- * @param[in/out] snapshotPath Path to snapshot directory, updated on first call
- * @param[in/out] snapshotCreated Flag tracking whether snapshot has been created
- * @param[in] historyRootPath Root directory for snapshots
- * @return Path to snapshot directory
- */
-static fs::path CreateSnapshotOnce(const fs::path& historyRootPath)
-{
-    // Works correctly if multiple tests (or threads) create backups in different historyRootPath's.
-    
-    static std::mutex snapshotMutex;
-    static std::unordered_map<std::string, fs::path> snapshotsCreated;
-
-    std::lock_guard lock(snapshotMutex);
-
-    const std::string key = historyRootPath.string();
-    auto it = snapshotsCreated.find(key);
-    if (it != snapshotsCreated.end())
-    {
-        return it->second;
-    }
-
-    fs::path snapshotPath = CreateSnapshotDir(historyRootPath);
-    snapshotsCreated[key] = snapshotPath;
-    return snapshotPath;
-}
-
-/**
  * @brief Process a single file for backup.
  *
  * Computes file hash, compares with stored state, archives previous version if changed,
  * and updates the current backup directory and database.
  *
- * @param[in] absolutePath Absolute path to source file
+ * @param[in] filePath Absolute path to source file
  * @param[in] sourceRootPath Root directory of source files
  * @param[in] currentBackupDir Current backup directory path
  * @param[in] database Database handle
  * @param[in/out] snapshotPath Snapshot directory path (may be created)
  * @param[in/out] snapshotCreated Flag indicating if snapshot directory exists
- * @param[in] historyDir History root directory for snapshots
+ * @param[in] historyFolderPath History root directory for snapshots
  * @param[in] onProgressCallback Optional progress callback function
  * @param[in/out] processedCount Counter for processed files
  * @return true if file processed successfully, false otherwise
  */
-static bool ProcessFile(const fs::path& absolutePath, const fs::path& sourceRootPath, const fs::path& currentBackupDir, sqlite3* database,
-                        const fs::path& historyDir,
-                        std::function<void(const BackupProgress&)> onProgressCallback, std::size_t& processedCount)
+static bool ProcessFile(const fs::path& filePath, const fs::path& sourceRootPath, const fs::path& backupFolderPath, sqlite3* database,
+                        const fs::path& historyFolderPath, std::function<void(const BackupProgress&)> onProgressCallback,
+                        std::atomic<std::size_t>& processedCount, std::function<fs::path()> createSnapshotOnce)
 {
     std::error_code errorCode;
-    fs::path relativePath = fs::relative(absolutePath, sourceRootPath, errorCode);
+    fs::path relativeFilePath = fs::relative(filePath, sourceRootPath, errorCode);
     if (errorCode)
     {
         return false;
     }
 
-    fs::path currentFilePath = currentBackupDir / relativePath;
+    // Fix for single-file-in-root case
+    if (relativeFilePath == ".")
+    {
+        relativeFilePath = filePath.filename();
+    }
+
+    fs::path currentFilePath = backupFolderPath / relativeFilePath;
 
     std::string newHash;
-    if (!HashFile(absolutePath, newHash))
+    if (!HashFile(filePath, newHash))
     {
         return false;
     }
@@ -311,15 +293,14 @@ static bool ProcessFile(const fs::path& absolutePath, const fs::path& sourceRoot
     std::string storedHash;
     ChangeType storedStatus;
     std::string storedTimestamp;
-    bool hadPreviousRecord = ((nullptr != database) && GetStoredFileState(database, relativePath.string(), storedHash, storedStatus, storedTimestamp) &&
-                              (ChangeType::Deleted != storedStatus));
+    bool hadPreviousRecord =
+        GetStoredFileState(database, relativeFilePath.string(), storedHash, storedStatus, storedTimestamp) && (ChangeType::Deleted != storedStatus);
     bool fileChanged = (!hadPreviousRecord || (newHash != storedHash));
 
     if ((fileChanged) && (hadPreviousRecord) && (fs::exists(currentFilePath, errorCode)))
     {
-        
-        auto snapshotPath = CreateSnapshotOnce(historyDir);
-        fs::path archivedPath = snapshotPath / relativePath;
+        auto snapshotPath = createSnapshotOnce();
+        fs::path archivedPath = snapshotPath / relativeFilePath;
         fs::create_directories(archivedPath.parent_path(), errorCode);
         fs::copy_file(currentFilePath, archivedPath, fs::copy_options::overwrite_existing, errorCode);
     }
@@ -329,16 +310,16 @@ static bool ProcessFile(const fs::path& absolutePath, const fs::path& sourceRoot
     {
         newStatus = ChangeType::Added;
         fs::create_directories(currentFilePath.parent_path(), errorCode);
-        fs::copy_file(absolutePath, currentFilePath, fs::copy_options::overwrite_existing, errorCode);
+        fs::copy_file(filePath, currentFilePath, fs::copy_options::overwrite_existing, errorCode);
     }
     else if (fileChanged)
     {
         newStatus = ChangeType::Modified;
-        auto snapshotPath = CreateSnapshotOnce(historyDir);
-        fs::path archivedPath = snapshotPath / relativePath;
+        auto snapshotPath = createSnapshotOnce();
+        fs::path archivedPath = snapshotPath / relativeFilePath;
         fs::create_directories(archivedPath.parent_path(), errorCode);
         fs::copy_file(currentFilePath, archivedPath, fs::copy_options::overwrite_existing, errorCode);
-        fs::copy_file(absolutePath, currentFilePath, fs::copy_options::overwrite_existing, errorCode);
+        fs::copy_file(filePath, currentFilePath, fs::copy_options::overwrite_existing, errorCode);
     }
     else
     {
@@ -357,7 +338,7 @@ static bool ProcessFile(const fs::path& absolutePath, const fs::path& sourceRoot
             timestampValue = storedTimestamp;
         }
 
-        if (!UpdateStoredFileState(database, relativePath.string(), newHash, newStatus, timestampValue))
+        if (!UpdateStoredFileState(database, relativeFilePath.string(), newHash, newStatus, timestampValue))
         {
             return false;
         }
@@ -365,7 +346,7 @@ static bool ProcessFile(const fs::path& absolutePath, const fs::path& sourceRoot
 
     if (nullptr != onProgressCallback)
     {
-        onProgressCallback({"collecting", ++processedCount, 0, absolutePath});
+        onProgressCallback({"collecting", ++processedCount, 0, filePath});
     }
 
     return true;
@@ -379,15 +360,15 @@ static bool ProcessFile(const fs::path& absolutePath, const fs::path& sourceRoot
  *
  * @param[in] database Database handle
  * @param[in] sourceDirectoryPath Source directory path
- * @param[in] currentBackupDir Current backup directory path
- * @param[in] historyDir History root directory for snapshots
+ * @param[in] backupFolderPath Current backup directory path
+ * @param[in] historyFolderPath History root directory for snapshots
  * @param[in/out] snapshotPath Snapshot directory path (may be created)
  * @param[in/out] snapshotCreated Flag indicating if snapshot directory exists
  * @param[in] onProgressCallback Optional progress callback function
  * @return true if operation succeeded, false otherwise
  */
-inline bool DetectDeletedFiles(sqlite3* database, const fs::path& sourceDirectoryPath, const fs::path& currentBackupDir, const fs::path& historyDir,
-                               std::function<void(const BackupProgress&)> onProgressCallback)
+inline bool DetectDeletedFiles(sqlite3* database, const fs::path& sourceDirectoryPath, const fs::path& backupFolderPath, const fs::path& historyFolderPath,
+                               std::function<void(const BackupProgress&)> onProgressCallback, std::function<fs::path()> createSnapshotOnce)
 {
     std::error_code errorCode;
     if (nullptr == database)
@@ -421,11 +402,11 @@ inline bool DetectDeletedFiles(sqlite3* database, const fs::path& sourceDirector
         }
 
         fs::path sourceFilePath = sourceDirectoryPath / databasePath;
-        fs::path currentFilePath = currentBackupDir / databasePath;
+        fs::path currentFilePath = backupFolderPath / databasePath;
 
         if (!fs::exists(sourceFilePath, errorCode))
         {
-            auto snapshotPath = CreateSnapshotOnce(historyDir);
+            auto snapshotPath = createSnapshotOnce();
 
             if (fs::exists(currentFilePath, errorCode))
             {
@@ -468,79 +449,135 @@ inline bool DetectDeletedFiles(sqlite3* database, const fs::path& sourceDirector
 
 bool RunBackup(const BackupConfig& config)
 {
-    sqlite3* database = nullptr;
+    bool operationSucceeded = true;
     std::error_code errorCode;
 
-    const fs::path currentBackupDir = config.backupRoot / "backup";
-    const fs::path historyDir = config.backupRoot / "deleted";
-
-    fs::create_directories(currentBackupDir, errorCode);
-    fs::create_directories(historyDir, errorCode);
-
-    if (!OpenDatabase(config.databaseFile, &database))
-    {
+    const fs::path sourceFolderPath = config.sourceDir;
+    if (!fs::exists(sourceFolderPath))
         return false;
-    }
 
-    if (!InitSchema(database))
-    {
-        CloseDatabase(database);
-        return false;
-    }
+    const fs::path backupFolderPath = config.backupRoot / "backup";
+    const fs::path historyFolderPath = config.backupRoot / "deleted";
 
-    sqlite3_exec(database, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+    fs::create_directories(backupFolderPath, errorCode);
+    fs::create_directories(historyFolderPath, errorCode);
 
-    bool operationSucceeded = true;
+    std::once_flag snapshotOnceFlag;
     fs::path snapshotPath;
-    bool snapshotCreated = false;
-    std::size_t processedCount = 0;
 
-    const fs::path effectiveSourceRoot = fs::is_directory(config.sourceDir, errorCode) ? config.sourceDir : config.sourceDir.parent_path();
-
-    if (fs::is_regular_file(config.sourceDir, errorCode))
+    // Lazy initialization pattern for snapshot creation.
+    auto CreateSnapshotOnce = [&]() -> fs::path
     {
-        if (!ProcessFile(config.sourceDir, effectiveSourceRoot, currentBackupDir, database, historyDir, config.onProgress,
-                         processedCount))
+        std::call_once(snapshotOnceFlag, [&]() { snapshotPath = CreateSnapshotDir(historyFolderPath); });
+        return snapshotPath;
+    };
+
+    // Thread-safe SQLite wrapper
+    SQLiteSession db(config.databaseFile);
+    sqlite3* sql = db.get();
+
+    if (!InitSchema(sql))
+        return false;
+
+    sqlite3_exec(sql, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+
+    // Progress callback thread-safety
+    std::mutex progressMutex;
+    auto threadSafeProgress = [&](const BackupProgress& progress)
+    {
+        if (!config.onProgress)
+            return;
+        std::lock_guard lock(progressMutex);
+        config.onProgress(progress);
+    };
+
+    std::atomic<std::size_t> processedCount{0};
+    std::mutex queueMutex;
+    std::condition_variable cv;
+    std::queue<fs::path> fileQueue;
+    bool doneWalking = false;
+
+    // Thread pool
+    std::vector<std::thread> threads;
+    unsigned int nThreads = std::max(1u, std::thread::hardware_concurrency());
+
+    for (unsigned int i = 0; i < nThreads; ++i)
+    {
+        threads.emplace_back(
+            [&]()
+            {
+                sqlite3* threadDb = db.get();
+                while (true)
+                {
+                    fs::path file;
+                    {
+                        std::unique_lock lock(queueMutex);
+                        cv.wait(lock, [&]() { return !fileQueue.empty() || doneWalking; });
+
+                        if (fileQueue.empty())
+                        {
+                            if (doneWalking)
+                                return; // nothing left
+                            continue;   // spurious wakeup
+                        }
+
+                        file = fileQueue.front();
+                        fileQueue.pop();
+                    }
+
+                    ProcessFile(file, sourceFolderPath, backupFolderPath, threadDb, historyFolderPath, threadSafeProgress, processedCount, CreateSnapshotOnce);
+                }
+            });
+    }
+
+    // Enqueue files lazily, streaming directly to threads
+    auto enqueueFile = [&](const fs::path& file)
+    {
         {
-            operationSucceeded = false;
+            std::lock_guard lock(queueMutex);
+            fileQueue.push(file);
+        }
+        cv.notify_one();
+    };
+
+    // Stream files from directory or single file
+    if (fs::is_directory(sourceFolderPath))
+    {
+        for (auto& entry : fs::recursive_directory_iterator(sourceFolderPath, errorCode))
+        {
+            if (!errorCode && entry.is_regular_file())
+                enqueueFile(entry.path());
         }
     }
-    else if (fs::is_directory(config.sourceDir, errorCode))
+    else if (fs::is_regular_file(sourceFolderPath))
     {
-        for (const auto& entry : fs::recursive_directory_iterator(config.sourceDir, errorCode))
-        {
-            if ((!errorCode) && (entry.is_regular_file()))
-            {
-                if (!ProcessFile(entry.path(), effectiveSourceRoot, currentBackupDir, database, historyDir, config.onProgress,
-                                 processedCount))
-                {
-                    operationSucceeded = false;
-                    break;
-                }
-            }
-        }
+        enqueueFile(sourceFolderPath); // single file works exactly the same
     }
     else
     {
         operationSucceeded = false;
     }
 
+    // Signal threads no more work
+    {
+        std::lock_guard lock(queueMutex);
+        doneWalking = true;
+    }
+    cv.notify_all();
+
+    // Wait for threads
+    for (auto& t : threads)
+        t.join();
+
     if (operationSucceeded)
     {
-        if (!DetectDeletedFiles(database, effectiveSourceRoot, currentBackupDir, historyDir, config.onProgress))
+        if (!DetectDeletedFiles(sql, sourceFolderPath, backupFolderPath, historyFolderPath, threadSafeProgress, CreateSnapshotOnce))
         {
             operationSucceeded = false;
         }
     }
 
-    if (nullptr != database)
-    {
-        // TODO: Rollback functionality has to be defined and implemented later.
-        // sqlite3_exec(database, "ROLLBACK;", nullptr, nullptr, nullptr);
-
-        sqlite3_exec(database, "COMMIT;", nullptr, nullptr, nullptr);
-        CloseDatabase(database);
-    }
+    sqlite3_exec(sql, "COMMIT;", nullptr, nullptr, nullptr);
 
     return operationSucceeded;
 }
