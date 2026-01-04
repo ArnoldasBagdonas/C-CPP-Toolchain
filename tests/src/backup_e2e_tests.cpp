@@ -146,7 +146,9 @@ TEST_F(E2ERunBackupTest, RunBackup_InitialBackup_CopiesAllFiles)
     EXPECT_EQ(readFile(liveBackupDir / "file1.txt"), "content1");
     EXPECT_EQ(readFile(liveBackupDir / "subdir/file2.txt"), "content2");
 
-    auto backupContents = GetDirectoryContents(liveBackupDir);
+    auto backupContentsRaw = GetDirectoryContents(liveBackupDir);
+    auto backupContents = NormalizePaths(backupContentsRaw);
+
     EXPECT_THAT(backupContents, testing::UnorderedElementsAre("file1.txt", "subdir", "subdir/file2.txt"))
         << "Backup directory should contain all expected files and subdirectories";
 

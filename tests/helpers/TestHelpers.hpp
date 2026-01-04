@@ -36,3 +36,15 @@ inline std::vector<std::string> ListDirectory(const fs::path& dir)
     std::sort(contents.begin(), contents.end());
     return contents;
 }
+
+// Helper to normalize Linux / Windows path symbols
+inline std::vector<std::string> NormalizePaths(const std::vector<std::string>& paths)
+{
+    std::vector<std::string> result;
+    for (const auto& p : paths)
+    {
+        fs::path pathObj(p);
+        result.push_back(pathObj.generic_string()); // converts separator to '/'
+    }
+    return result;
+}
