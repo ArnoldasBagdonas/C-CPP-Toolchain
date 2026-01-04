@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <mutex>
 #include <sstream>
 
 #include <sqlite3.h>
@@ -80,7 +81,8 @@ static bool InitSchema(sqlite3* database)
  * @param[in] timestamp Last update timestamp
  * @return true if operation succeeded, false otherwise
  */
-static bool UpdateStoredFileState(sqlite3* database, const std::string& filePath, const std::string& fileHash, ChangeType changeStatus, const std::string& timestamp)
+static bool UpdateStoredFileState(sqlite3* database, const std::string& filePath, const std::string& fileHash, ChangeType changeStatus,
+                                  const std::string& timestamp)
 {
     if (nullptr == database)
     {
@@ -249,8 +251,13 @@ static fs::path CreateSnapshotDir(const fs::path& historyRootPath)
  * @param[in] historyRootPath Root directory for snapshots
  * @return Path to snapshot directory
  */
-static fs::path EnsureSnapshot(fs::path& snapshotPath, bool& snapshotCreated, const fs::path& historyRootPath)
+static fs::path CreateSnapshotOnce(const fs::path& historyRootPath)
 {
+    static std::mutex snapshotMutex;
+    static fs::path snapshotPath;
+    static bool snapshotCreated = false;
+
+    std::lock_guard lock(snapshotMutex);
     if (!snapshotCreated)
     {
         snapshotPath = CreateSnapshotDir(historyRootPath);
@@ -276,8 +283,9 @@ static fs::path EnsureSnapshot(fs::path& snapshotPath, bool& snapshotCreated, co
  * @param[in/out] processedCount Counter for processed files
  * @return true if file processed successfully, false otherwise
  */
-static bool ProcessFile(const fs::path& absolutePath, const fs::path& sourceRootPath, const fs::path& currentBackupDir, sqlite3* database, fs::path& snapshotPath, bool& snapshotCreated,
-                        const fs::path& historyDir, std::function<void(const BackupProgress&)> onProgressCallback, std::size_t& processedCount)
+static bool ProcessFile(const fs::path& absolutePath, const fs::path& sourceRootPath, const fs::path& currentBackupDir, sqlite3* database,
+                        const fs::path& historyDir,
+                        std::function<void(const BackupProgress&)> onProgressCallback, std::size_t& processedCount)
 {
     std::error_code errorCode;
     fs::path relativePath = fs::relative(absolutePath, sourceRootPath, errorCode);
@@ -297,12 +305,14 @@ static bool ProcessFile(const fs::path& absolutePath, const fs::path& sourceRoot
     std::string storedHash;
     ChangeType storedStatus;
     std::string storedTimestamp;
-    bool hadPreviousRecord = ((nullptr != database) && GetStoredFileState(database, relativePath.string(), storedHash, storedStatus, storedTimestamp) && (ChangeType::Deleted != storedStatus));
+    bool hadPreviousRecord = ((nullptr != database) && GetStoredFileState(database, relativePath.string(), storedHash, storedStatus, storedTimestamp) &&
+                              (ChangeType::Deleted != storedStatus));
     bool fileChanged = (!hadPreviousRecord || (newHash != storedHash));
 
     if ((fileChanged) && (hadPreviousRecord) && (fs::exists(currentFilePath, errorCode)))
     {
-        EnsureSnapshot(snapshotPath, snapshotCreated, historyDir);
+        
+        auto snapshotPath = CreateSnapshotOnce(historyDir);
         fs::path archivedPath = snapshotPath / relativePath;
         fs::create_directories(archivedPath.parent_path(), errorCode);
         fs::copy_file(currentFilePath, archivedPath, fs::copy_options::overwrite_existing, errorCode);
@@ -318,7 +328,7 @@ static bool ProcessFile(const fs::path& absolutePath, const fs::path& sourceRoot
     else if (fileChanged)
     {
         newStatus = ChangeType::Modified;
-        EnsureSnapshot(snapshotPath, snapshotCreated, currentBackupDir.parent_path() / "history");
+        auto snapshotPath = CreateSnapshotOnce(historyDir);
         fs::path archivedPath = snapshotPath / relativePath;
         fs::create_directories(archivedPath.parent_path(), errorCode);
         fs::copy_file(currentFilePath, archivedPath, fs::copy_options::overwrite_existing, errorCode);
@@ -370,8 +380,8 @@ static bool ProcessFile(const fs::path& absolutePath, const fs::path& sourceRoot
  * @param[in] onProgressCallback Optional progress callback function
  * @return true if operation succeeded, false otherwise
  */
-inline bool DetectDeletedFiles(sqlite3* database, const fs::path& sourceDirectoryPath, const fs::path& currentBackupDir,
-                               const fs::path& historyDir, fs::path& snapshotPath, bool& snapshotCreated, std::function<void(const BackupProgress&)> onProgressCallback)
+inline bool DetectDeletedFiles(sqlite3* database, const fs::path& sourceDirectoryPath, const fs::path& currentBackupDir, const fs::path& historyDir,
+                               std::function<void(const BackupProgress&)> onProgressCallback)
 {
     std::error_code errorCode;
     if (nullptr == database)
@@ -409,7 +419,7 @@ inline bool DetectDeletedFiles(sqlite3* database, const fs::path& sourceDirector
 
         if (!fs::exists(sourceFilePath, errorCode))
         {
-            EnsureSnapshot(snapshotPath, snapshotCreated, historyDir);
+            auto snapshotPath = CreateSnapshotOnce(historyDir);
 
             if (fs::exists(currentFilePath, errorCode))
             {
@@ -483,7 +493,8 @@ bool RunBackup(const BackupConfig& config)
 
     if (fs::is_regular_file(config.sourceDir, errorCode))
     {
-        if (!ProcessFile(config.sourceDir, effectiveSourceRoot, currentBackupDir, database, snapshotPath, snapshotCreated, historyDir, config.onProgress, processedCount))
+        if (!ProcessFile(config.sourceDir, effectiveSourceRoot, currentBackupDir, database, historyDir, config.onProgress,
+                         processedCount))
         {
             operationSucceeded = false;
         }
@@ -494,7 +505,8 @@ bool RunBackup(const BackupConfig& config)
         {
             if ((!errorCode) && (entry.is_regular_file()))
             {
-                if (!ProcessFile(entry.path(), effectiveSourceRoot, currentBackupDir, database, snapshotPath, snapshotCreated, historyDir, config.onProgress, processedCount))
+                if (!ProcessFile(entry.path(), effectiveSourceRoot, currentBackupDir, database, historyDir, config.onProgress,
+                                 processedCount))
                 {
                     operationSucceeded = false;
                     break;
@@ -509,7 +521,7 @@ bool RunBackup(const BackupConfig& config)
 
     if (operationSucceeded)
     {
-        if (!DetectDeletedFiles(database, effectiveSourceRoot, currentBackupDir, historyDir, snapshotPath, snapshotCreated, config.onProgress))
+        if (!DetectDeletedFiles(database, effectiveSourceRoot, currentBackupDir, historyDir, config.onProgress))
         {
             operationSucceeded = false;
         }
@@ -517,8 +529,8 @@ bool RunBackup(const BackupConfig& config)
 
     if (nullptr != database)
     {
-        //TODO: Rollback functionality has to be defined and implemented later.
-        //sqlite3_exec(database, "ROLLBACK;", nullptr, nullptr, nullptr);
+        // TODO: Rollback functionality has to be defined and implemented later.
+        // sqlite3_exec(database, "ROLLBACK;", nullptr, nullptr, nullptr);
 
         sqlite3_exec(database, "COMMIT;", nullptr, nullptr, nullptr);
         CloseDatabase(database);
