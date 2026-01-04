@@ -297,14 +297,6 @@ static bool ProcessFile(const fs::path& filePath, const fs::path& sourceRootPath
         GetStoredFileState(database, relativeFilePath.string(), storedHash, storedStatus, storedTimestamp) && (ChangeType::Deleted != storedStatus);
     bool fileChanged = (!hadPreviousRecord || (newHash != storedHash));
 
-    if ((fileChanged) && (hadPreviousRecord) && (fs::exists(currentFilePath, errorCode)))
-    {
-        auto snapshotPath = createSnapshotOnce();
-        fs::path archivedPath = snapshotPath / relativeFilePath;
-        fs::create_directories(archivedPath.parent_path(), errorCode);
-        fs::copy_file(currentFilePath, archivedPath, fs::copy_options::overwrite_existing, errorCode);
-    }
-
     ChangeType newStatus;
     if (!hadPreviousRecord)
     {
@@ -479,8 +471,6 @@ bool RunBackup(const BackupConfig& config)
     if (!InitSchema(sql))
         return false;
 
-    sqlite3_exec(sql, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
-
     // Progress callback thread-safety
     std::mutex progressMutex;
     auto threadSafeProgress = [&](const BackupProgress& progress)
@@ -506,7 +496,7 @@ bool RunBackup(const BackupConfig& config)
         threads.emplace_back(
             [&]()
             {
-                sqlite3* threadDb = db.get();
+                sqlite3* threadDb = db.get(); // one connection per thread
                 while (true)
                 {
                     fs::path file;
@@ -576,8 +566,6 @@ bool RunBackup(const BackupConfig& config)
             operationSucceeded = false;
         }
     }
-
-    sqlite3_exec(sql, "COMMIT;", nullptr, nullptr, nullptr);
 
     return operationSucceeded;
 }

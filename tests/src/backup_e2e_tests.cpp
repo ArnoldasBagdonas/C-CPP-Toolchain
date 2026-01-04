@@ -164,22 +164,29 @@ TEST_F(E2ERunBackupTest, RunBackup_IncrementalBackup_TracksChanges)
 
     bool result = RunBackup(cfg);
     ASSERT_TRUE(result);
-
+    
     fs::path liveBackupDir = backupRoot / "backup";
-    ExpectBackupContents(liveBackupDir, {"file1.txt", "file3.txt"});
+    {
+        auto rawContents = GetDirectoryContents(liveBackupDir);
+        auto contents = NormalizePaths(rawContents);
+        ASSERT_THAT(contents, testing::UnorderedElementsAreArray({"file1.txt", "file3.txt"}));
+    }
 
-    EXPECT_EQ(readFile(liveBackupDir / "file1.txt"), "modified content");
-    EXPECT_EQ(readFile(liveBackupDir / "file3.txt"), "new file");
+    ASSERT_EQ(readFile(liveBackupDir / "file1.txt"), "modified content");
+    ASSERT_EQ(readFile(liveBackupDir / "file3.txt"), "new file");
 
     fs::path deletedDir = backupRoot / "deleted";
     auto snapshots = ListDirectory(deletedDir);
     ASSERT_THAT(snapshots, testing::SizeIs(1));
 
     fs::path snapshotDir = deletedDir / snapshots[0];
-    ExpectBackupContents(snapshotDir, {"file1.txt", "file2.txt"});
-
-    EXPECT_EQ(readFile(snapshotDir / "file1.txt"), "content1");
-    EXPECT_EQ(readFile(snapshotDir / "file2.txt"), "content2");
+    {
+        auto rawContents = GetDirectoryContents(snapshotDir);
+        auto contents = NormalizePaths(rawContents);
+        ASSERT_THAT(contents, testing::UnorderedElementsAreArray({"file1.txt", "file2.txt"}));
+    }
+    ASSERT_EQ(readFile(snapshotDir / "file1.txt"), "content1");
+    ASSERT_EQ(readFile(snapshotDir / "file2.txt"), "content2");
 }
 
 /* ============================================================================ */
