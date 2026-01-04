@@ -1,0 +1,11 @@
+{
+    // CMake Tools settings
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.configureOnOpen": true,
+    "cmake.generator": "Ninja",               // Recommended: Ninja, can change to "Unix Makefiles" if needed
+    "cmake.preferredGenerators": ["Ninja"],
+    "cmake.configureArgs": [],                // optional extra args for configuration
+    "cmake.buildArgs": [],                    // optional extra args for build
+    "cmake.installPrefix": "${workspaceFolder}/install",  // optional install directory
+    "cmake.parallelJobs": 4,                   // optional parallel build jobs
+}

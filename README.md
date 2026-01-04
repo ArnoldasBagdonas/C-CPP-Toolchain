@@ -1,6 +1,14 @@
 # C-CPP Toolchain
 
+directory layout
 
+```
+backup_root/
+├── current/
+├── history/
+│   └── YYYY-MM-DD_HH-MM-SS/
+└── backup.db
+```
 
 ## Getting started
 

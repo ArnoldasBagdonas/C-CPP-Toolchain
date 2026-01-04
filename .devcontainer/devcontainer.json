@@ -1,0 +1,53 @@
+// For format details, see https://aka.ms/devcontainer.json
+{
+    "name": "C++",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "mhutchie.git-graph",
+                "eamodio.gitlens",
+                "github.vscode-pull-request-github",
+                "hediet.vscode-drawio",
+
+                // C++ tooling
+                "ms-vscode.cpptools",
+                "ms-vscode.cpptools-extension-pack",
+                "ms-vscode.cmake-tools",
+                "cheshirekow.cmake-format",
+
+                // Test Explorer + TestMate
+                // Test Explorer + TestMate
+                // In version 1.59, VS Code added an official API and UI for running tests, which provides all
+                // the functionality of this extension and more. Therefore "hbenl.vscode-test-explorer" extension is now deprecated.
+                //"hbenl.vscode-test-explorer",
+                "matepek.vscode-catch2-test-adapter",
+                "jacqueslucke.gcov-viewer",
+
+                // Python
+                "LittleFoxTeam.vscode-python-test-adapter",
+
+                "google.geminicodeassist"
+            ],
+            "settings": {
+                "files.eol": "\n",
+                "cmake.enableCTest": false
+            }
+        }
+    },
+
+    "runArgs": [
+        "--privileged",
+        "--device=/dev/bus/usb:/dev/bus/usb"
+    ],
+
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    "workspaceFolder": "/workspace",
+
+    "remoteUser": "vscode",
+
+    "postCreateCommand": "find . -type f \\( -name \"*.cpp\" -o -name \"*.h\" -o -name \"*.c\" -o -name \"*.hpp\" -o -name \"*.txt\" -o -name \"*.sh\" \\) -exec sed -i 's/\\r$//' {} +"
+}

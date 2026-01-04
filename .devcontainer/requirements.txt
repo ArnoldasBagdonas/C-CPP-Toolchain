@@ -1,0 +1,24 @@
+# requirements.txt
+sphinx
+jinja2
+markupsafe
+breathe
+exhale
+sphinx-rtd-theme
+sphinx-sitemap
+myst_parser
+sphinx-needs
+sphinx-needs[plotting]
+sphinxcontrib-plantuml
+sphinxcontrib-openapi
+matplotlib
+mlx.traceability
+pytest
+# sphinx-test-reports functionality not as expected, skip it!
+# sphinx-test-reports 
+sphinx-jsonschema
+git-hours
+
+# https://gitstats.readthedocs.io/en/latest/installation.html
+gitstats
+# gitstats-forked

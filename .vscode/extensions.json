@@ -1,0 +1,33 @@
+{
+    "recommendations": [
+        "mhutchie.git-graph",
+        "eamodio.gitlens",
+        "github.vscode-pull-request-github",
+        "hediet.vscode-drawio",
+
+        // C++ tooling
+        "ms-vscode.cpptools",
+        "ms-vscode.cpptools-extension-pack",
+        "ms-vscode.cmake-tools",
+        "cheshirekow.cmake-format",
+
+        // Test Explorer + TestMate
+        // In version 1.59, VS Code added an official API and UI for running tests, which provides all
+        // the functionality of this extension and more. Therefore "hbenl.vscode-test-explorer" extension is now deprecated.
+        //"hbenl.vscode-test-explorer",
+        "matepek.vscode-catch2-test-adapter",
+        "jacqueslucke.gcov-viewer",
+
+        // Python
+        "LittleFoxTeam.vscode-python-test-adapter",
+
+        //SQLite
+        "qwtel.sqlite-viewer",
+
+        "google.geminicodeassist"
+    ],
+    "unwantedRecommendations": [
+        "platformio.platformio-ide",
+        "fredericbonnet.cmake-test-adapter"
+    ]
+}
