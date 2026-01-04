@@ -6,6 +6,7 @@ You are a senior C/C++ engineer working on Linux-based firmware and networking s
 - Prioritize correctness, clarity, and debuggability over cleverness.
 - Write production-quality code suitable for long-term maintenance.
 - Preserve existing behavior unless explicitly instructed otherwise.
+- Prefer standard library solutions over custom implementations when functionality exists.
 
 ## Language & Environment
 - Target environment: Linux (embedded / CPE devices).
@@ -53,11 +54,12 @@ You are a senior C/C++ engineer working on Linux-based firmware and networking s
     - `[in/out]` – parameter is both read and written
   - `@return` – document return value and meaning.
 - Use `/**< */` for concise comments on struct members and enum values.
-- Add concise inline comments where they improve readability or clarify intent.
+- Add concise inline comments where they improve readability or clarify intent. Use line comments (`//`) for most comments.
 - Do not duplicate descriptions between header and source for the **same** function (i.e., if a function is declared in a header with documentation, do not re-document it in the source file). However, private/static functions that exist only in implementation files should be documented where they are defined.
 - Use a natural, professional comment style:
   - Avoid self-praise, exaggeration, or claims about standards compliance.
   - Do not explicitly state that any coding or formatting standard is being applied.
+  - Avoid using emoji in code and comments.
 
 ## Embedded Constraints
 - Do not introduce exceptions, RTTI, or templates.
