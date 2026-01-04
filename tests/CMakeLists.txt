@@ -21,15 +21,14 @@ FetchContent_MakeAvailable(googletest)
 # ---------------------------------------------------------------------------
 set(TEST_SOURCES
     src/main.cpp
-    src/backup_lifecycle_test.cpp
-    src/backup_extended_tests.cpp
-    src/backup_change_type_test.cpp
+    src/backup_e2e_tests.cpp
+    src/backup_change_type_tests.cpp
 )
 
 # Optional sanitizer test sources
 string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_TYPE_UPPER)
 if(BUILD_TYPE_UPPER MATCHES "VALGRIND|ADDRESSSANITIZER|THREADSANITIZER|MEMORYSANITIZER|UNDEFINEDBEHAVIORSANITIZER")
-    # list(APPEND TEST_SOURCES src/sanitizer_test.cpp)
+    # list(APPEND TEST_SOURCES src/sanitizer_tests.cpp)
 endif()
 
 # ---------------------------------------------------------------------------

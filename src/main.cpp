@@ -24,53 +24,53 @@ int main(int argc, char* argv[])
 
     auto result = options.parse(argc, argv);
 
-    if (result.count("help") || !result.count("source") || !result.count("backup"))
+    if ((result.count("help")) || (!result.count("source")) || (!result.count("backup")))
     {
         std::cout << options.help() << '\n';
         return 0;
     }
 
-    BackupConfig cfg;
+    BackupConfig configuration;
 
-    cfg.sourceDir = fs::path(result["source"].as<std::string>());
-    cfg.backupRoot = fs::path(result["backup"].as<std::string>());
-    cfg.verbose = result.count("verbose") > 0;
+    configuration.sourceDir = fs::path(result["source"].as<std::string>());
+    configuration.backupRoot = fs::path(result["backup"].as<std::string>());
+    configuration.verbose = (result.count("verbose") > 0);
 
-    // Database is always fixed inside backup folder
-    cfg.databaseFile = cfg.backupRoot / "backup.db";
+    configuration.databaseFile = configuration.backupRoot / "backup.db";
 
-    // Validate source directory
-    std::error_code ec;
-    cfg.sourceDir = fs::canonical(cfg.sourceDir, ec);
-    if (ec || !fs::is_directory(cfg.sourceDir))
+    std::error_code errorCode;
+    configuration.sourceDir = fs::canonical(configuration.sourceDir, errorCode);
+    if ((errorCode) || (!fs::is_directory(configuration.sourceDir)))
     {
         std::cerr << "Invalid source directory\n";
         return 1;
     }
 
-    // Ensure backup root exists
-    fs::create_directories(cfg.backupRoot, ec);
-    if (ec)
+    fs::create_directories(configuration.backupRoot, errorCode);
+    if (errorCode)
     {
         std::cerr << "Failed to create backup directory\n";
         return 1;
     }
 
-    // Optional verbose progress
-    if (cfg.verbose)
+    if (configuration.verbose)
     {
-        cfg.onProgress = [](const BackupProgress& p)
-        { std::cout << "[" << p.stage << "] " << p.processed << "/" << p.total << " : " << p.file << '\n'; };
+        configuration.onProgress = [](const BackupProgress& progress)
+        {
+            std::cout << "[" << progress.stage << "] " << progress.processed << "/" << progress.total << " : " << progress.file << '\n';
+        };
     }
 
-    if (!RunBackup(cfg))
+    if (!RunBackup(configuration))
     {
         std::cerr << "Backup failed\n";
         return 1;
     }
 
-    if (cfg.verbose)
+    if (configuration.verbose)
+    {
         std::cout << "Backup completed successfully\n";
+    }
 
     return 0;
 }

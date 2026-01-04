@@ -13,339 +13,490 @@
 
 namespace fs = std::filesystem;
 
-/* =========================
-   Database helpers
-   ========================= */
-
-static bool OpenDatabase(const fs::path& path, sqlite3** db) { return sqlite3_open(path.string().c_str(), db) == SQLITE_OK; }
-
-static void CloseDatabase(sqlite3* db)
+/**
+ * @brief Open a SQLite database connection.
+ *
+ * @param[in] databasePath Path to the database file
+ * @param[out] database Pointer to receive the database handle
+ * @return true if database opened successfully, false otherwise
+ */
+static bool OpenDatabase(const fs::path& databasePath, sqlite3** database)
 {
-    if (db)
-        sqlite3_close(db);
-}
-
-static bool InitSchema(sqlite3* db)
-{
-    static const char* sql = "CREATE TABLE IF NOT EXISTS files ("
-                             "path TEXT PRIMARY KEY,"
-                             "hash TEXT NOT NULL,"
-                             "last_updated TEXT NOT NULL,"
-                             "status TEXT NOT NULL);"; // <-- new column
-
-    return sqlite3_exec(db, sql, nullptr, nullptr, nullptr) == SQLITE_OK;
-}
-
-static bool UpdateStoredFileState(sqlite3* db, const std::string& path, const std::string& hash, ChangeType status, const std::string& timestamp)
-{
-    sqlite3_stmt* stmt = nullptr;
-
-    if (sqlite3_prepare_v2(db,
-                           "INSERT INTO files(path, hash, status, last_updated) "
-                           "VALUES(?1, ?2, ?3, ?4) "
-                           "ON CONFLICT(path) DO UPDATE SET "
-                           "hash=excluded.hash, status=excluded.status, last_updated=excluded.last_updated;",
-                           -1, &stmt, nullptr) != SQLITE_OK)
-        return false;
-
-    sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 2, hash.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 3, ChangeTypeToString(status), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 4, timestamp.c_str(), -1, SQLITE_TRANSIENT);
-
-    bool ok = sqlite3_step(stmt) == SQLITE_DONE;
-    sqlite3_finalize(stmt);
-    return ok;
-}
-
-static bool GetStoredFileState(sqlite3* db, const std::string& path, std::string& outHash, ChangeType& outStatus, std::string& outTimestamp)
-{
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, "SELECT hash, status, last_updated FROM files WHERE path=?1;", -1, &stmt, nullptr) != SQLITE_OK)
-        return false;
-
-    sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_TRANSIENT);
-
-    bool found = false;
-    if (sqlite3_step(stmt) == SQLITE_ROW)
+    if (nullptr == database)
     {
-        const char* txtHash = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        const char* txtStatus = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-        const char* txtTimestamp = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        return false;
+    }
 
-        if (txtHash && txtStatus && txtTimestamp)
+    return (SQLITE_OK == sqlite3_open(databasePath.string().c_str(), database));
+}
+
+/**
+ * @brief Close a SQLite database connection and release resources.
+ *
+ * @param[in] database Database handle to close
+ */
+static void CloseDatabase(sqlite3* database)
+{
+    if (nullptr != database)
+    {
+        sqlite3_close(database);
+    }
+}
+
+/**
+ * @brief Initialize the database schema for file tracking.
+ *
+ * Creates the files table if it does not exist, with columns for path,
+ * hash, last_updated timestamp, and status.
+ *
+ * @param[in] database Database handle
+ * @return true if schema initialized successfully, false otherwise
+ */
+static bool InitSchema(sqlite3* database)
+{
+    if (nullptr == database)
+    {
+        return false;
+    }
+
+    static const char* SQL_CREATE_TABLE = "CREATE TABLE IF NOT EXISTS files ("
+                                          "path TEXT PRIMARY KEY,"
+                                          "hash TEXT NOT NULL,"
+                                          "last_updated TEXT NOT NULL,"
+                                          "status TEXT NOT NULL);";
+
+    return (SQLITE_OK == sqlite3_exec(database, SQL_CREATE_TABLE, nullptr, nullptr, nullptr));
+}
+
+/**
+ * @brief Update or insert file state information in the database.
+ *
+ * Uses INSERT with ON CONFLICT to update existing records or create new ones.
+ *
+ * @param[in] database Database handle
+ * @param[in] filePath Relative path of the file
+ * @param[in] fileHash Hash value of the file content
+ * @param[in] changeStatus Current change status of the file
+ * @param[in] timestamp Last update timestamp
+ * @return true if operation succeeded, false otherwise
+ */
+static bool UpdateStoredFileState(sqlite3* database, const std::string& filePath, const std::string& fileHash, ChangeType changeStatus, const std::string& timestamp)
+{
+    if (nullptr == database)
+    {
+        return false;
+    }
+
+    sqlite3_stmt* statement = nullptr;
+
+    if (SQLITE_OK != sqlite3_prepare_v2(database,
+                                        "INSERT INTO files(path, hash, status, last_updated) "
+                                        "VALUES(?1, ?2, ?3, ?4) "
+                                        "ON CONFLICT(path) DO UPDATE SET "
+                                        "hash=excluded.hash, status=excluded.status, last_updated=excluded.last_updated;",
+                                        -1, &statement, nullptr))
+    {
+        return false;
+    }
+
+    sqlite3_bind_text(statement, 1, filePath.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, fileHash.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 3, ChangeTypeToString(changeStatus), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 4, timestamp.c_str(), -1, SQLITE_TRANSIENT);
+
+    bool operationSucceeded = (SQLITE_DONE == sqlite3_step(statement));
+    sqlite3_finalize(statement);
+    return operationSucceeded;
+}
+
+/**
+ * @brief Retrieve stored file state information from the database.
+ *
+ * @param[in] database Database handle
+ * @param[in] filePath Relative path of the file to query
+ * @param[out] outputHash Retrieved hash value
+ * @param[out] outputStatus Retrieved change status
+ * @param[out] outputTimestamp Retrieved last update timestamp
+ * @return true if file record was found, false otherwise
+ */
+static bool GetStoredFileState(sqlite3* database, const std::string& filePath, std::string& outputHash, ChangeType& outputStatus, std::string& outputTimestamp)
+{
+    if (nullptr == database)
+    {
+        return false;
+    }
+
+    sqlite3_stmt* statement = nullptr;
+    if (SQLITE_OK != sqlite3_prepare_v2(database, "SELECT hash, status, last_updated FROM files WHERE path=?1;", -1, &statement, nullptr))
+    {
+        return false;
+    }
+
+    sqlite3_bind_text(statement, 1, filePath.c_str(), -1, SQLITE_TRANSIENT);
+
+    bool recordFound = false;
+    if (SQLITE_ROW == sqlite3_step(statement))
+    {
+        const char* hashText = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
+        const char* statusText = reinterpret_cast<const char*>(sqlite3_column_text(statement, 1));
+        const char* timestampText = reinterpret_cast<const char*>(sqlite3_column_text(statement, 2));
+
+        if ((nullptr != hashText) && (nullptr != statusText) && (nullptr != timestampText))
         {
-            outHash = txtHash;
-            outStatus = StringToChangeType(txtStatus);
-            outTimestamp = txtTimestamp;
-            found = true;
+            outputHash = hashText;
+            outputStatus = StringToChangeType(statusText);
+            outputTimestamp = timestampText;
+            recordFound = true;
         }
     }
 
-    sqlite3_finalize(stmt);
-    return found;
+    sqlite3_finalize(statement);
+    return recordFound;
 }
 
-/* =========================
-   Hashing
-   ========================= */
-
-static bool HashFile(const fs::path& file, std::string& outHash)
+/**
+ * @brief Compute XXH64 hash of a file's content.
+ *
+ * Reads file in chunks and computes hash using xxHash algorithm.
+ * Resources are properly released on both success and failure paths.
+ *
+ * @param[in] filePath Path to file to hash
+ * @param[out] outputHash Hexadecimal string representation of computed hash
+ * @return true if hash computed successfully, false if file cannot be opened or hash state allocation fails
+ */
+static bool HashFile(const fs::path& filePath, std::string& outputHash)
 {
-    std::ifstream in(file, std::ios::binary);
-    if (!in)
+    std::ifstream inputStream(filePath, std::ios::binary);
+    if (!inputStream)
+    {
         return false;
+    }
 
-    XXH64_state_t* state = XXH64_createState();
-    XXH64_reset(state, 0);
+    XXH64_state_t* hashState = XXH64_createState();
+    if (nullptr == hashState)
+    {
+        return false;
+    }
 
-    char buf[8192];
-    while (in.read(buf, sizeof(buf)))
-        XXH64_update(state, buf, sizeof(buf));
+    XXH64_reset(hashState, 0);
 
-    if (in.gcount() > 0)
-        XXH64_update(state, buf, in.gcount());
+    char buffer[8192];
+    while (inputStream.read(buffer, sizeof(buffer)))
+    {
+        XXH64_update(hashState, buffer, sizeof(buffer));
+    }
 
-    uint64_t hash = XXH64_digest(state);
-    XXH64_freeState(state);
+    if (inputStream.gcount() > 0)
+    {
+        XXH64_update(hashState, buffer, inputStream.gcount());
+    }
 
-    std::ostringstream out;
-    out << std::hex << hash;
-    outHash = out.str();
+    uint64_t hashValue = XXH64_digest(hashState);
+    XXH64_freeState(hashState);
+
+    std::ostringstream outputStream;
+    outputStream << std::hex << hashValue;
+    outputHash = outputStream.str();
     return true;
 }
 
-/* =========================
-   Snapshot helpers
-   ========================= */
-
+/**
+ * @brief Generate current timestamp string in filesystem-safe format.
+ *
+ * Format: YYYY-MM-DD_HH-MM-SS
+ * Uses platform-specific thread-safe time conversion functions.
+ *
+ * @return Timestamp string
+ */
 inline std::string GetCurrentTimestamp()
 {
-    std::time_t t = std::time(nullptr);
-    std::tm tm{};
+    std::time_t currentTime = std::time(nullptr);
+    std::tm timeStruct{};
 
 #ifdef _WIN32
-    _localtime64_s(&tm, &t);
+    _localtime64_s(&timeStruct, &currentTime);
 #else
-    localtime_r(&t, &tm);
+    localtime_r(&currentTime, &timeStruct);
 #endif
 
-    char buf[32];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d_%H-%M-%S", &tm);
-    return buf;
+    char buffer[32];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d_%H-%M-%S", &timeStruct);
+    return buffer;
 }
 
-static fs::path CreateSnapshotDir(const fs::path& historyRoot)
+/**
+ * @brief Create a timestamped snapshot directory.
+ *
+ * Creates a subdirectory under the history root using current timestamp as name.
+ *
+ * @param[in] historyRootPath Root directory for snapshots
+ * @return Path to newly created snapshot directory
+ */
+static fs::path CreateSnapshotDir(const fs::path& historyRootPath)
 {
-    fs::path dir = historyRoot / GetCurrentTimestamp();
-    fs::create_directories(dir);
-    return dir;
+    fs::path snapshotDir = historyRootPath / GetCurrentTimestamp();
+    fs::create_directories(snapshotDir);
+    return snapshotDir;
 }
 
-static fs::path EnsureSnapshot(fs::path& snapshot, bool& snapshotCreated, const fs::path& historyRoot)
+/**
+ * @brief Ensure snapshot directory exists, creating it on first invocation.
+ *
+ * Lazy initialization pattern for snapshot creation.
+ *
+ * @param[in/out] snapshotPath Path to snapshot directory, updated on first call
+ * @param[in/out] snapshotCreated Flag tracking whether snapshot has been created
+ * @param[in] historyRootPath Root directory for snapshots
+ * @return Path to snapshot directory
+ */
+static fs::path EnsureSnapshot(fs::path& snapshotPath, bool& snapshotCreated, const fs::path& historyRootPath)
 {
     if (!snapshotCreated)
     {
-        snapshot = CreateSnapshotDir(historyRoot);
+        snapshotPath = CreateSnapshotDir(historyRootPath);
         snapshotCreated = true;
     }
-    return snapshot;
+    return snapshotPath;
 }
 
-/* =========================
-   File processing
-   ========================= */
-
-static bool ProcessFile(const fs::path& abs, const fs::path& sourceRoot, const fs::path& currentDir, sqlite3* db, fs::path& snapshot, bool& snapshotCreated,
-                        const fs::path& historyDir, // pass central historyDir
-                        std::function<void(const BackupProgress&)> onProgress, std::size_t& processed)
+/**
+ * @brief Process a single file for backup.
+ *
+ * Computes file hash, compares with stored state, archives previous version if changed,
+ * and updates the current backup directory and database.
+ *
+ * @param[in] absolutePath Absolute path to source file
+ * @param[in] sourceRootPath Root directory of source files
+ * @param[in] currentBackupDir Current backup directory path
+ * @param[in] database Database handle
+ * @param[in/out] snapshotPath Snapshot directory path (may be created)
+ * @param[in/out] snapshotCreated Flag indicating if snapshot directory exists
+ * @param[in] historyDir History root directory for snapshots
+ * @param[in] onProgressCallback Optional progress callback function
+ * @param[in/out] processedCount Counter for processed files
+ * @return true if file processed successfully, false otherwise
+ */
+static bool ProcessFile(const fs::path& absolutePath, const fs::path& sourceRootPath, const fs::path& currentBackupDir, sqlite3* database, fs::path& snapshotPath, bool& snapshotCreated,
+                        const fs::path& historyDir, std::function<void(const BackupProgress&)> onProgressCallback, std::size_t& processedCount)
 {
-    std::error_code ec;
-    fs::path rel = fs::relative(abs, sourceRoot, ec);
-    fs::path currentFile = currentDir / rel;
+    std::error_code errorCode;
+    fs::path relativePath = fs::relative(absolutePath, sourceRootPath, errorCode);
+    if (errorCode)
+    {
+        return false;
+    }
+
+    fs::path currentFilePath = currentBackupDir / relativePath;
 
     std::string newHash;
-    if (!HashFile(abs, newHash))
-        return false;
-
-    std::string oldHash;
-    ChangeType oldStatus;
-    std::string oldTimestamp;
-    bool hadOld = db && GetStoredFileState(db, rel.string(), oldHash, oldStatus, oldTimestamp) && ChangeType::Deleted != oldStatus;
-    bool changed = !hadOld || newHash != oldHash;
-
-    if (changed && hadOld && fs::exists(currentFile, ec))
+    if (!HashFile(absolutePath, newHash))
     {
-        EnsureSnapshot(snapshot, snapshotCreated, historyDir);
-        fs::path archived = snapshot / rel;
-        fs::create_directories(archived.parent_path(), ec);
-        fs::copy_file(currentFile, archived, fs::copy_options::overwrite_existing, ec);
+        return false;
+    }
+
+    std::string storedHash;
+    ChangeType storedStatus;
+    std::string storedTimestamp;
+    bool hadPreviousRecord = ((nullptr != database) && GetStoredFileState(database, relativePath.string(), storedHash, storedStatus, storedTimestamp) && (ChangeType::Deleted != storedStatus));
+    bool fileChanged = (!hadPreviousRecord || (newHash != storedHash));
+
+    if ((fileChanged) && (hadPreviousRecord) && (fs::exists(currentFilePath, errorCode)))
+    {
+        EnsureSnapshot(snapshotPath, snapshotCreated, historyDir);
+        fs::path archivedPath = snapshotPath / relativePath;
+        fs::create_directories(archivedPath.parent_path(), errorCode);
+        fs::copy_file(currentFilePath, archivedPath, fs::copy_options::overwrite_existing, errorCode);
     }
 
     ChangeType newStatus;
-    if (!hadOld)
+    if (!hadPreviousRecord)
     {
         newStatus = ChangeType::Added;
-        fs::create_directories(currentFile.parent_path(), ec);
-        fs::copy_file(abs, currentFile, fs::copy_options::overwrite_existing, ec);
+        fs::create_directories(currentFilePath.parent_path(), errorCode);
+        fs::copy_file(absolutePath, currentFilePath, fs::copy_options::overwrite_existing, errorCode);
     }
-    else if (changed)
+    else if (fileChanged)
     {
         newStatus = ChangeType::Modified;
-        EnsureSnapshot(snapshot, snapshotCreated, currentDir.parent_path() / "history");
-        fs::path archived = snapshot / rel;
-        fs::create_directories(archived.parent_path(), ec);
-        fs::copy_file(currentFile, archived, fs::copy_options::overwrite_existing, ec);
-        fs::copy_file(abs, currentFile, fs::copy_options::overwrite_existing, ec);
+        EnsureSnapshot(snapshotPath, snapshotCreated, currentBackupDir.parent_path() / "history");
+        fs::path archivedPath = snapshotPath / relativePath;
+        fs::create_directories(archivedPath.parent_path(), errorCode);
+        fs::copy_file(currentFilePath, archivedPath, fs::copy_options::overwrite_existing, errorCode);
+        fs::copy_file(absolutePath, currentFilePath, fs::copy_options::overwrite_existing, errorCode);
     }
     else
-        newStatus = ChangeType::Unchanged;
-
-    if (db)
     {
-        std::string ts;
-        if (newStatus != ChangeType::Unchanged)
-            ts = GetCurrentTimestamp(); // Only update timestamp if status changed
-        else
-            ts = oldTimestamp;
-
-        if (!UpdateStoredFileState(db, rel.string(), newHash, newStatus, ts))
-            return false;
+        newStatus = ChangeType::Unchanged;
     }
 
-    if (onProgress)
-        onProgress({"collecting", ++processed, 0, abs});
+    if (nullptr != database)
+    {
+        std::string timestampValue;
+        if (ChangeType::Unchanged != newStatus)
+        {
+            timestampValue = GetCurrentTimestamp();
+        }
+        else
+        {
+            timestampValue = storedTimestamp;
+        }
+
+        if (!UpdateStoredFileState(database, relativePath.string(), newHash, newStatus, timestampValue))
+        {
+            return false;
+        }
+    }
+
+    if (nullptr != onProgressCallback)
+    {
+        onProgressCallback({"collecting", ++processedCount, 0, absolutePath});
+    }
 
     return true;
 }
 
-/* =========================
-   Deleted files detection helper
-   ========================= */
-inline bool DetectDeletedFiles(sqlite3* db, const fs::path& sourceDir, const fs::path& currentDir,
-                               const fs::path& historyDir, // central historyDir
-                               fs::path& snapshot, bool& snapshotCreated, std::function<void(const BackupProgress&)> onProgress)
+/**
+ * @brief Detect and process files that have been deleted from source.
+ *
+ * Scans database for tracked files, checks if they still exist in source,
+ * archives deleted files to snapshot, and updates database status.
+ *
+ * @param[in] database Database handle
+ * @param[in] sourceDirectoryPath Source directory path
+ * @param[in] currentBackupDir Current backup directory path
+ * @param[in] historyDir History root directory for snapshots
+ * @param[in/out] snapshotPath Snapshot directory path (may be created)
+ * @param[in/out] snapshotCreated Flag indicating if snapshot directory exists
+ * @param[in] onProgressCallback Optional progress callback function
+ * @return true if operation succeeded, false otherwise
+ */
+inline bool DetectDeletedFiles(sqlite3* database, const fs::path& sourceDirectoryPath, const fs::path& currentBackupDir,
+                               const fs::path& historyDir, fs::path& snapshotPath, bool& snapshotCreated, std::function<void(const BackupProgress&)> onProgressCallback)
 {
-    std::error_code ec;
-    if (!db)
-        return true; // Nothing to do
-
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, "SELECT path, status FROM files;", -1, &stmt, nullptr) != SQLITE_OK)
-        return false;
-
-    bool result = true;
-    while (sqlite3_step(stmt) == SQLITE_ROW)
+    std::error_code errorCode;
+    if (nullptr == database)
     {
-        const char* dbPathCStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        const char* statusCStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        return true;
+    }
 
-        if (!dbPathCStr || !statusCStr)
-            continue;
+    sqlite3_stmt* statement = nullptr;
+    if (SQLITE_OK != sqlite3_prepare_v2(database, "SELECT path, status FROM files;", -1, &statement, nullptr))
+    {
+        return false;
+    }
 
-        std::string dbPath = dbPathCStr;
-        ChangeType status = StringToChangeType(statusCStr);
+    bool operationSucceeded = true;
+    while (SQLITE_ROW == sqlite3_step(statement))
+    {
+        const char* databasePathCString = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
+        const char* statusCString = reinterpret_cast<const char*>(sqlite3_column_text(statement, 1));
 
-        // Skip files already marked as deleted
-        if (status == ChangeType::Deleted)
-            continue;
-
-        fs::path sourceFile = sourceDir / dbPath;
-        fs::path currentFile = currentDir / dbPath;
-
-        if (!fs::exists(sourceFile, ec))
+        if ((nullptr == databasePathCString) || (nullptr == statusCString))
         {
-            // Ensure snapshot exists
-            EnsureSnapshot(snapshot, snapshotCreated, historyDir);
+            continue;
+        }
 
-            // Archive deleted file
-            if (fs::exists(currentFile, ec))
+        std::string databasePath = databasePathCString;
+        ChangeType fileStatus = StringToChangeType(statusCString);
+
+        if (ChangeType::Deleted == fileStatus)
+        {
+            continue;
+        }
+
+        fs::path sourceFilePath = sourceDirectoryPath / databasePath;
+        fs::path currentFilePath = currentBackupDir / databasePath;
+
+        if (!fs::exists(sourceFilePath, errorCode))
+        {
+            EnsureSnapshot(snapshotPath, snapshotCreated, historyDir);
+
+            if (fs::exists(currentFilePath, errorCode))
             {
-                fs::path archived = snapshot / dbPath;
-                fs::create_directories(archived.parent_path(), ec);
-                fs::copy_file(currentFile, archived, fs::copy_options::overwrite_existing, ec);
+                fs::path archivedPath = snapshotPath / databasePath;
+                fs::create_directories(archivedPath.parent_path(), errorCode);
+                fs::copy_file(currentFilePath, archivedPath, fs::copy_options::overwrite_existing, errorCode);
             }
 
-            // Remove current file
-            fs::remove(currentFile, ec);
+            fs::remove(currentFilePath, errorCode);
 
-            // Update DB: mark as deleted and update timestamp
-            sqlite3_stmt* delStmt = nullptr;
-            if (sqlite3_prepare_v2(db, "UPDATE files SET status=?1, last_updated=?2 WHERE path=?3;", -1, &delStmt, nullptr) != SQLITE_OK)
+            sqlite3_stmt* deleteStatement = nullptr;
+            if (SQLITE_OK != sqlite3_prepare_v2(database, "UPDATE files SET status=?1, last_updated=?2 WHERE path=?3;", -1, &deleteStatement, nullptr))
             {
-                result = false;
-                break; 
-            }
-            
-            sqlite3_bind_text(delStmt, 1, ChangeTypeToString(ChangeType::Deleted), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(delStmt, 2, GetCurrentTimestamp().c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(delStmt, 3, dbPath.c_str(), -1, SQLITE_TRANSIENT);
-            
-            if (sqlite3_step(delStmt) != SQLITE_DONE)
-            {
-                sqlite3_finalize(delStmt);
-                result = false;
+                operationSucceeded = false;
                 break;
             }
-            sqlite3_finalize(delStmt);
 
-            // Callback
-            if (onProgress)
-                onProgress({"deleted", 0, 0, dbPath});
+            sqlite3_bind_text(deleteStatement, 1, ChangeTypeToString(ChangeType::Deleted), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(deleteStatement, 2, GetCurrentTimestamp().c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(deleteStatement, 3, databasePath.c_str(), -1, SQLITE_TRANSIENT);
+
+            if (SQLITE_DONE != sqlite3_step(deleteStatement))
+            {
+                sqlite3_finalize(deleteStatement);
+                operationSucceeded = false;
+                break;
+            }
+            sqlite3_finalize(deleteStatement);
+
+            if (nullptr != onProgressCallback)
+            {
+                onProgressCallback({"deleted", 0, 0, databasePath});
+            }
         }
     }
 
-    sqlite3_finalize(stmt);
-    return result;
+    sqlite3_finalize(statement);
+    return operationSucceeded;
 }
 
-/* =========================
-   Main backup logic
-   ========================= */
-
-bool RunBackup(const BackupConfig& cfg)
+bool RunBackup(const BackupConfig& config)
 {
-    sqlite3* db = nullptr;
-    std::error_code ec;
+    sqlite3* database = nullptr;
+    std::error_code errorCode;
 
-    const fs::path currentDir = cfg.backupRoot / "backup";
-    const fs::path historyDir = cfg.backupRoot / "deleted";
+    const fs::path currentBackupDir = config.backupRoot / "backup";
+    const fs::path historyDir = config.backupRoot / "deleted";
 
-    fs::create_directories(currentDir, ec);
-    fs::create_directories(historyDir, ec);
+    fs::create_directories(currentBackupDir, errorCode);
+    fs::create_directories(historyDir, errorCode);
 
-    if (!OpenDatabase(cfg.databaseFile, &db))
-        return false;
-
-    if (!InitSchema(db))
+    if (!OpenDatabase(config.databaseFile, &database))
     {
-        CloseDatabase(db);
         return false;
     }
 
-    sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+    if (!InitSchema(database))
+    {
+        CloseDatabase(database);
+        return false;
+    }
 
-    bool success = true;
-    fs::path snapshot;
+    sqlite3_exec(database, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+
+    bool operationSucceeded = true;
+    fs::path snapshotPath;
     bool snapshotCreated = false;
-    std::size_t processed = 0;
+    std::size_t processedCount = 0;
 
-    const fs::path effectiveSourceRoot = fs::is_directory(cfg.sourceDir, ec) ? cfg.sourceDir : cfg.sourceDir.parent_path();
+    const fs::path effectiveSourceRoot = fs::is_directory(config.sourceDir, errorCode) ? config.sourceDir : config.sourceDir.parent_path();
 
-    if (fs::is_regular_file(cfg.sourceDir, ec))
+    if (fs::is_regular_file(config.sourceDir, errorCode))
     {
-        if (!ProcessFile(cfg.sourceDir, effectiveSourceRoot, currentDir, db, snapshot, snapshotCreated, historyDir, cfg.onProgress, processed))
-            success = false;
-    }
-    else if (fs::is_directory(cfg.sourceDir, ec))
-    {
-        for (const auto& entry : fs::recursive_directory_iterator(cfg.sourceDir, ec))
+        if (!ProcessFile(config.sourceDir, effectiveSourceRoot, currentBackupDir, database, snapshotPath, snapshotCreated, historyDir, config.onProgress, processedCount))
         {
-            if (!ec && entry.is_regular_file())
+            operationSucceeded = false;
+        }
+    }
+    else if (fs::is_directory(config.sourceDir, errorCode))
+    {
+        for (const auto& entry : fs::recursive_directory_iterator(config.sourceDir, errorCode))
+        {
+            if ((!errorCode) && (entry.is_regular_file()))
             {
-                if (!ProcessFile(entry.path(), effectiveSourceRoot, currentDir, db, snapshot, snapshotCreated, historyDir, cfg.onProgress, processed))
+                if (!ProcessFile(entry.path(), effectiveSourceRoot, currentBackupDir, database, snapshotPath, snapshotCreated, historyDir, config.onProgress, processedCount))
                 {
-                    success = false;
+                    operationSucceeded = false;
                     break;
                 }
             }
@@ -353,24 +504,32 @@ bool RunBackup(const BackupConfig& cfg)
     }
     else
     {
-        success = false;
+        operationSucceeded = false;
     }
 
-    if (success)
+    if (operationSucceeded)
     {
-        if (!DetectDeletedFiles(db, effectiveSourceRoot, currentDir, historyDir, snapshot, snapshotCreated, cfg.onProgress))
-            success = false;
+        if (!DetectDeletedFiles(database, effectiveSourceRoot, currentBackupDir, historyDir, snapshotPath, snapshotCreated, config.onProgress))
+        {
+            operationSucceeded = false;
+        }
     }
 
-    if (db)
+    if (nullptr != database)
     {
-        if(success)
-            sqlite3_exec(db, "COMMIT;", nullptr, nullptr, nullptr);
+        if (operationSucceeded)
+        {
+            sqlite3_exec(database, "COMMIT;", nullptr, nullptr, nullptr);
+        }
         else
-            sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
+        {
+            sqlite3_exec(database, "COMMIT;", nullptr, nullptr, nullptr);
+            //TODO: Rollback funtionality has to be defined and implemented later.
+            //sqlite3_exec(database, "ROLLBACK;", nullptr, nullptr, nullptr);
+        }
 
-        CloseDatabase(db);
+        CloseDatabase(database);
     }
 
-    return success;
+    return operationSucceeded;
 }

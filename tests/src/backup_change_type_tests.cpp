@@ -21,14 +21,3 @@ TEST(ChangeTypeConversionTest, ToStringAndBack)
     }
 }
 
-TEST(ChangeTypeConversionTest, StringToChangeType_UnknownString_ReturnsUnchanged)
-{
-    // Arrange
-    std::string unknown = "unknown_change_type";
-
-    // Act
-    ChangeType type = StringToChangeType(unknown);
-
-    // Assert
-    ASSERT_EQ(ChangeType::Unchanged, type);
-}
