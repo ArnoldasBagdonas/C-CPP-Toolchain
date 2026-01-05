@@ -276,7 +276,7 @@ static bool DetectDeletedFiles(const fs::path& sourceFolderPath, const fs::path&
 
 bool RunBackup(const BackupConfig& configuration)
 {
-    bool operationSucceeded = true;
+    std::atomic<bool> operationSucceeded{true};
     std::error_code errorCode;
 
     const fs::path sourceFilePath = configuration.sourceDir;
@@ -358,8 +358,13 @@ bool RunBackup(const BackupConfig& configuration)
                         fileQueue.pop();
                     }
 
-                    ProcessFile(currentFile, sourceFolderPath, backupFolderPath, CreateSnapshotOnce, databaseSession, threadSafeProgressCallback,
-                                processedCount);
+                    // Capture the result and update global flag
+                    bool fileSuccess = ProcessFile(currentFile, sourceFolderPath, backupFolderPath, CreateSnapshotOnce, databaseSession,
+                                                   threadSafeProgressCallback, processedCount);
+                    if (!fileSuccess)
+                    {
+                        operationSucceeded.store(false, std::memory_order_relaxed);
+                    }
                 }
             });
     }
@@ -391,7 +396,7 @@ bool RunBackup(const BackupConfig& configuration)
     }
     else
     {
-        operationSucceeded = false;
+        operationSucceeded.store(false);
     }
 
     // Signal threads no more work
@@ -407,13 +412,13 @@ bool RunBackup(const BackupConfig& configuration)
         workerThread.join();
     }
 
-    if (operationSucceeded)
+    if (operationSucceeded.load())
     {
         if (!DetectDeletedFiles(sourceFolderPath, backupFolderPath, CreateSnapshotOnce, databaseSession, threadSafeProgressCallback))
         {
-            operationSucceeded = false;
+            operationSucceeded.store(false);
         }
     }
 
-    return operationSucceeded;
+    return operationSucceeded.load();
 }
