@@ -113,21 +113,20 @@ static fs::path CreateSnapshotDirectory(const fs::path& historyRootPath)
  * and updates the current backup directory and database.
  *
  * @param[in] filePath Absolute path to source file
- * @param[in] sourceRootPath Root directory of source files
- * @param[in] currentBackupDirectory Current backup directory path
+ * @param[in] sourceFolderPath Root directory of source files
+ * @param[in] backupFolderPath Current backup directory path
+ * @param[in] createSnapshotPathOnce Lazy initialization function for snapshot creation
  * @param[in] databaseSession SQLite session for database operations
- * @param[in] historyFolderPath History root directory for snapshots
  * @param[in] onProgressCallback Optional progress callback function
  * @param[in/out] processedCount Counter for processed files
- * @param[in] createSnapshotOnce Lazy initialization function for snapshot creation
  * @return true if file processed successfully, false otherwise
  */
-static bool ProcessFile(const fs::path& filePath, const fs::path& sourceRootPath, const fs::path& currentBackupDirectory, SQLiteSession& databaseSession,
-                        const fs::path& historyFolderPath, std::function<void(const BackupProgress&)> onProgressCallback,
-                        std::atomic<std::size_t>& processedCount, std::function<fs::path()> createSnapshotOnce)
+static bool ProcessFile(const fs::path& filePath, const fs::path& sourceFolderPath, const fs::path& backupFolderPath,
+                        std::function<fs::path()> createSnapshotPathOnce, SQLiteSession& databaseSession,
+                        std::function<void(const BackupProgress&)> onProgressCallback, std::atomic<std::size_t>& processedCount)
 {
     std::error_code errorCode;
-    fs::path relativeFilePath = fs::relative(filePath, sourceRootPath, errorCode);
+    fs::path relativeFilePath = fs::relative(filePath, sourceFolderPath, errorCode);
     if (errorCode)
     {
         return false;
@@ -139,7 +138,7 @@ static bool ProcessFile(const fs::path& filePath, const fs::path& sourceRootPath
         relativeFilePath = filePath.filename();
     }
 
-    fs::path currentFilePath = currentBackupDirectory / relativeFilePath;
+    fs::path currentFilePath = backupFolderPath / relativeFilePath;
 
     std::string newHash;
     if (!ComputeFileHash(filePath, newHash))
@@ -164,7 +163,7 @@ static bool ProcessFile(const fs::path& filePath, const fs::path& sourceRootPath
     else if (fileChanged)
     {
         newStatus = ChangeType::Modified;
-        auto snapshotPath = createSnapshotOnce();
+        auto snapshotPath = createSnapshotPathOnce();
         fs::path archivedPath = snapshotPath / relativeFilePath;
         fs::create_directories(archivedPath.parent_path(), errorCode);
         fs::copy_file(currentFilePath, archivedPath, fs::copy_options::overwrite_existing, errorCode);
@@ -204,17 +203,16 @@ static bool ProcessFile(const fs::path& filePath, const fs::path& sourceRootPath
  * Scans database for tracked files, checks if they still exist in source,
  * archives deleted files to snapshot, and updates database status.
  *
- * @param[in] databaseSession SQLite session for database operations
- * @param[in] sourceDirectoryPath Source directory path
- * @param[in] currentBackupDirectory Current backup directory path
+ * @param[in] sourceFolderPath Source directory path
+ * @param[in] backupFolderPath Current backup directory path
  * @param[in] historyFolderPath History root directory for snapshots
+ * @param[in] createSnapshotPathOnce Lazy initialization function for snapshot creation
+ * @param[in] databaseSession SQLite session for database operations
  * @param[in] onProgressCallback Optional progress callback function
- * @param[in] createSnapshotOnce Lazy initialization function for snapshot creation
  * @return true if operation succeeded, false otherwise
  */
-static bool DetectDeletedFiles(SQLiteSession& databaseSession, const fs::path& sourceDirectoryPath, const fs::path& currentBackupDirectory,
-                               const fs::path& historyFolderPath, std::function<void(const BackupProgress&)> onProgressCallback,
-                               std::function<fs::path()> createSnapshotOnce)
+static bool DetectDeletedFiles(const fs::path& sourceFolderPath, const fs::path& backupFolderPath, std::function<fs::path()> createSnapshotPathOnce,
+                               SQLiteSession& databaseSession, std::function<void(const BackupProgress&)> onProgressCallback)
 {
     std::error_code errorCode;
 
@@ -243,12 +241,12 @@ static bool DetectDeletedFiles(SQLiteSession& databaseSession, const fs::path& s
             continue;
         }
 
-        fs::path sourceFilePath = sourceDirectoryPath / databasePath;
-        fs::path currentFilePath = currentBackupDirectory / databasePath;
+        fs::path sourceFilePath = sourceFolderPath / databasePath;
+        fs::path currentFilePath = backupFolderPath / databasePath;
 
         if (!fs::exists(sourceFilePath, errorCode))
         {
-            auto snapshotPath = createSnapshotOnce();
+            auto snapshotPath = createSnapshotPathOnce();
 
             if (fs::exists(currentFilePath, errorCode))
             {
@@ -281,16 +279,18 @@ bool RunBackup(const BackupConfig& configuration)
     bool operationSucceeded = true;
     std::error_code errorCode;
 
-    const fs::path sourceFolderPath = configuration.sourceDir;
+    const fs::path sourceFilePath = configuration.sourceDir;
+    const fs::path sourceFolderPath = fs::is_regular_file(configuration.sourceDir) ? configuration.sourceDir.parent_path() : configuration.sourceDir;
+
     if (!fs::exists(sourceFolderPath))
     {
         return false;
     }
 
-    const fs::path currentBackupDirectory = configuration.backupRoot / "backup";
+    const fs::path backupFolderPath = configuration.backupRoot / "backup";
     const fs::path historyFolderPath = configuration.backupRoot / "deleted";
 
-    fs::create_directories(currentBackupDirectory, errorCode);
+    fs::create_directories(backupFolderPath, errorCode);
     fs::create_directories(historyFolderPath, errorCode);
 
     std::once_flag snapshotOnceFlag;
@@ -358,8 +358,8 @@ bool RunBackup(const BackupConfig& configuration)
                         fileQueue.pop();
                     }
 
-                    ProcessFile(currentFile, sourceFolderPath, currentBackupDirectory, databaseSession, historyFolderPath, threadSafeProgressCallback,
-                                processedCount, CreateSnapshotOnce);
+                    ProcessFile(currentFile, sourceFolderPath, backupFolderPath, CreateSnapshotOnce, databaseSession, threadSafeProgressCallback,
+                                processedCount);
                 }
             });
     }
@@ -375,8 +375,7 @@ bool RunBackup(const BackupConfig& configuration)
     };
 
     // Stream files from directory or single file
-    fs::path actualSourceRootPath = sourceFolderPath;
-    if (fs::is_directory(sourceFolderPath))
+    if (fs::is_directory(sourceFilePath))
     {
         for (auto& entry : fs::recursive_directory_iterator(sourceFolderPath, errorCode))
         {
@@ -386,11 +385,9 @@ bool RunBackup(const BackupConfig& configuration)
             }
         }
     }
-    else if (fs::is_regular_file(sourceFolderPath))
+    else if (fs::is_regular_file(sourceFilePath))
     {
-        EnqueueFile(sourceFolderPath);
-        // Use parent directory as root for deletion detection
-        actualSourceRootPath = sourceFolderPath.parent_path();
+        EnqueueFile(sourceFilePath);
     }
     else
     {
@@ -412,8 +409,7 @@ bool RunBackup(const BackupConfig& configuration)
 
     if (operationSucceeded)
     {
-        if (!DetectDeletedFiles(databaseSession, actualSourceRootPath, currentBackupDirectory, historyFolderPath, threadSafeProgressCallback,
-                                CreateSnapshotOnce))
+        if (!DetectDeletedFiles(sourceFolderPath, backupFolderPath, CreateSnapshotOnce, databaseSession, threadSafeProgressCallback))
         {
             operationSucceeded = false;
         }
