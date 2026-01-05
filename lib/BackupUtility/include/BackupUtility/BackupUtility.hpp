@@ -22,12 +22,12 @@ enum class ChangeType
 /**
  * @brief Convert a ChangeType enumeration value to its string representation.
  *
- * @param[in] type The change type to convert
+ * @param[in] changeType The change type to convert
  * @return String representation of the change type
  */
-inline const char* ChangeTypeToString(ChangeType type)
+inline const char* ChangeTypeToString(ChangeType changeType)
 {
-    switch (type)
+    switch (changeType)
     {
     case ChangeType::Unchanged:
         return "Unchanged";
@@ -106,10 +106,10 @@ struct BackupConfig
  * @brief Execute a backup operation based on provided configuration.
  *
  * This function performs an incremental backup of the source directory,
- * tracking file changes, archiving modified/deleted files, and maintaining
+ * tracking file changes, archiving modified or deleted files, and maintaining
  * backup state in a SQLite database.
  *
- * @param[in] config Configuration parameters for the backup operation
+ * @param[in] configuration Configuration parameters for the backup operation
  * @return true if backup completed successfully, false on error
  */
-bool RunBackup(const BackupConfig& config);
+bool RunBackup(const BackupConfig& configuration);

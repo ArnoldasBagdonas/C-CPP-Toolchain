@@ -7,17 +7,15 @@
 TEST(ChangeTypeConversionTest, ToStringAndBack)
 {
     // Arrange
-    const std::vector<ChangeType> allTypes = {
-        ChangeType::Unchanged, ChangeType::Added, ChangeType::Modified, ChangeType::Deleted};
+    const std::vector<ChangeType> allTypes = {ChangeType::Unchanged, ChangeType::Added, ChangeType::Modified, ChangeType::Deleted};
 
-    for (const auto &type : allTypes)
+    for (const auto& changeType : allTypes)
     {
         // Act
-        const char *str = ChangeTypeToString(type);
-        ChangeType convertedType = StringToChangeType(str);
+        const char* stringRepresentation = ChangeTypeToString(changeType);
+        ChangeType convertedType = StringToChangeType(stringRepresentation);
 
         // Assert
-        ASSERT_EQ(type, convertedType);
+        ASSERT_EQ(changeType, convertedType);
     }
 }
-

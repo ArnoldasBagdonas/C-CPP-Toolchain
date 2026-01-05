@@ -43,19 +43,19 @@ class E2ERunBackupTest : public ::testing::Test
         fs::remove_all(backupRoot, ec);
     }
 
-    void createFile(const fs::path& path, const std::string& content)
+    void CreateFile(const fs::path& filePath, const std::string& content)
     {
-        fs::create_directories(path.parent_path());
-        std::ofstream ofs(path, std::ios::binary);
-        ASSERT_TRUE(ofs.good()) << "Failed to create file: " << path;
-        ofs << content;
+        fs::create_directories(filePath.parent_path());
+        std::ofstream outputStream(filePath, std::ios::binary);
+        ASSERT_TRUE(outputStream.good()) << "Failed to create file: " << filePath;
+        outputStream << content;
     }
 
-    std::string readFile(const fs::path& path)
+    std::string ReadFile(const fs::path& filePath)
     {
-        std::ifstream ifs(path, std::ios::binary);
+        std::ifstream inputStream(filePath, std::ios::binary);
         std::stringstream buffer;
-        buffer << ifs.rdbuf();
+        buffer << inputStream.rdbuf();
         return buffer.str();
     }
 };
@@ -66,54 +66,65 @@ class E2ERunBackupTest : public ::testing::Test
 
 TEST_F(E2ERunBackupTest, RunBackup_WithNonExistentSource_ReturnsFalse)
 {
-    BackupConfig cfg;
-    cfg.sourceDir = "non_existent_dir";
-    cfg.backupRoot = backupRoot;
-    cfg.databaseFile = dbPath;
+    // Arrange
+    BackupConfig configuration;
+    configuration.sourceDir = "non_existent_dir";
+    configuration.backupRoot = backupRoot;
+    configuration.databaseFile = dbPath;
 
-    bool result = RunBackup(cfg);
-    ASSERT_FALSE(result);
+    // Act
+    bool backupResult = RunBackup(configuration);
+
+    // Assert
+    ASSERT_FALSE(backupResult);
 
     fs::path liveBackupDir = backupRoot / "backup";
     if (fs::exists(liveBackupDir))
     {
-        auto contents = GetDirectoryContents(liveBackupDir);
-        ASSERT_THAT(contents, testing::IsEmpty());
+        auto liveContents = GetDirectoryContents(liveBackupDir);
+        ASSERT_THAT(liveContents, testing::IsEmpty()) << "Live backup directory should be empty for failed backup";
     }
 
     fs::path deletedDir = backupRoot / "deleted";
     if (fs::exists(deletedDir))
     {
-        auto contents = GetDirectoryContents(deletedDir);
-        ASSERT_THAT(contents, testing::IsEmpty());
+        auto deletedContents = GetDirectoryContents(deletedDir);
+        ASSERT_THAT(deletedContents, testing::IsEmpty()) << "Deleted directory should be empty for failed backup";
     }
 }
 
 TEST_F(E2ERunBackupTest, RunBackup_WithEmptySource_CreatesEmptyBackup)
 {
-    BackupConfig cfg;
-    cfg.sourceDir = sourceDir;
-    cfg.backupRoot = backupRoot;
-    cfg.databaseFile = dbPath;
+    // Arrange
+    BackupConfig configuration;
+    configuration.sourceDir = sourceDir;
+    configuration.backupRoot = backupRoot;
+    configuration.databaseFile = dbPath;
 
-    bool result = RunBackup(cfg);
-    ASSERT_TRUE(result);
+    // Act
+    bool backupResult = RunBackup(configuration);
+
+    // Assert
+    ASSERT_TRUE(backupResult);
 
     fs::path liveBackupDir = backupRoot / "backup";
-    ASSERT_TRUE(fs::exists(liveBackupDir));
+    bool liveBackupExists = fs::exists(liveBackupDir);
+    ASSERT_TRUE(liveBackupExists);
     {
-        auto contents = GetDirectoryContents(liveBackupDir);
-        ASSERT_THAT(contents, testing::IsEmpty());
+        auto liveContents = GetDirectoryContents(liveBackupDir);
+        ASSERT_THAT(liveContents, testing::IsEmpty()) << "Live backup directory should be empty for empty source";
     }
 
     fs::path deletedDir = backupRoot / "deleted";
-    ASSERT_TRUE(fs::exists(deletedDir));
+    bool deletedDirExists = fs::exists(deletedDir);
+    ASSERT_TRUE(deletedDirExists);
     {
-        auto contents = GetDirectoryContents(deletedDir);
-        ASSERT_THAT(contents, testing::IsEmpty());
+        auto deletedContents = GetDirectoryContents(deletedDir);
+        ASSERT_THAT(deletedContents, testing::IsEmpty()) << "Deleted directory should be empty for initial backup";
     }
 
-    ASSERT_TRUE(fs::exists(dbPath));
+    bool databaseExists = fs::exists(dbPath);
+    ASSERT_TRUE(databaseExists);
 }
 
 /* ============================================================================ */
@@ -122,32 +133,43 @@ TEST_F(E2ERunBackupTest, RunBackup_WithEmptySource_CreatesEmptyBackup)
 
 TEST_F(E2ERunBackupTest, RunBackup_InitialBackup_CopiesAllFiles)
 {
-    createFile(sourceDir / "file1.txt", "content1");
-    createFile(sourceDir / "subdir" / "file2.txt", "content2");
+    // Arrange
+    CreateFile(sourceDir / "file1.txt", "content1");
+    CreateFile(sourceDir / "subdir" / "file2.txt", "content2");
 
-    BackupConfig cfg;
-    cfg.sourceDir = sourceDir;
-    cfg.backupRoot = backupRoot;
-    cfg.databaseFile = dbPath;
+    BackupConfig configuration;
+    configuration.sourceDir = sourceDir;
+    configuration.backupRoot = backupRoot;
+    configuration.databaseFile = dbPath;
 
-    bool result = RunBackup(cfg);
-    ASSERT_TRUE(result);
+    // Act
+    bool backupResult = RunBackup(configuration);
+
+    // Assert
+    ASSERT_TRUE(backupResult);
 
     fs::path liveBackupDir = backupRoot / "backup";
-    ASSERT_TRUE(fs::exists(liveBackupDir));
+    bool liveBackupExists = fs::exists(liveBackupDir);
+    ASSERT_TRUE(liveBackupExists);
 
     {
-        auto contents = GetDirectoryContents(liveBackupDir);
-        ASSERT_THAT(contents, testing::UnorderedElementsAreArray({"file1.txt", "subdir", "subdir/file2.txt"}));
-        ASSERT_EQ(readFile(liveBackupDir / "file1.txt"), "content1");
-        ASSERT_EQ(readFile(liveBackupDir / "subdir" / "file2.txt"), "content2");
+        auto liveContents = GetDirectoryContents(liveBackupDir);
+        ASSERT_THAT(liveContents, testing::UnorderedElementsAreArray({"file1.txt", "subdir", "subdir/file2.txt"}))
+            << "Backup directory should contain all expected files and subdirectories";
+
+        std::string file1Content = ReadFile(liveBackupDir / "file1.txt");
+        ASSERT_EQ(file1Content, "content1");
+
+        std::string file2Content = ReadFile(liveBackupDir / "subdir" / "file2.txt");
+        ASSERT_EQ(file2Content, "content2");
     }
 
     fs::path deletedDir = backupRoot / "deleted";
-    ASSERT_TRUE(fs::exists(deletedDir));
+    bool deletedDirExists = fs::exists(deletedDir);
+    ASSERT_TRUE(deletedDirExists);
     {
-        auto contents = GetDirectoryContents(deletedDir);
-        ASSERT_THAT(contents, testing::IsEmpty());
+        auto deletedContents = GetDirectoryContents(deletedDir);
+        ASSERT_THAT(deletedContents, testing::IsEmpty()) << "Deleted directory should be empty for initial backup";
     }
 }
 
@@ -157,41 +179,55 @@ TEST_F(E2ERunBackupTest, RunBackup_InitialBackup_CopiesAllFiles)
 
 TEST_F(E2ERunBackupTest, RunBackup_IncrementalBackup_TracksChanges)
 {
-    createFile(sourceDir / "file1.txt", "content1");
-    createFile(sourceDir / "file2.txt", "content2");
+    // Arrange
+    CreateFile(sourceDir / "file1.txt", "content1");
+    CreateFile(sourceDir / "file2.txt", "content2");
 
-    BackupConfig cfg;
-    cfg.sourceDir = sourceDir;
-    cfg.backupRoot = backupRoot;
-    cfg.databaseFile = dbPath;
+    BackupConfig configuration;
+    configuration.sourceDir = sourceDir;
+    configuration.backupRoot = backupRoot;
+    configuration.databaseFile = dbPath;
 
-    ASSERT_TRUE(RunBackup(cfg));
+    bool initialBackupResult = RunBackup(configuration);
+    ASSERT_TRUE(initialBackupResult);
 
-    createFile(sourceDir / "file1.txt", "modified content");
-    createFile(sourceDir / "file3.txt", "new file");
+    CreateFile(sourceDir / "file1.txt", "modified content");
+    CreateFile(sourceDir / "file3.txt", "new file");
     fs::remove(sourceDir / "file2.txt");
 
-    bool result = RunBackup(cfg);
-    ASSERT_TRUE(result);
+    // Act
+    bool incrementalBackupResult = RunBackup(configuration);
+
+    // Assert
+    ASSERT_TRUE(incrementalBackupResult);
 
     fs::path liveBackupDir = backupRoot / "backup";
     {
-        auto contents = GetDirectoryContents(liveBackupDir);
-        ASSERT_THAT(contents, testing::UnorderedElementsAreArray({"file1.txt", "file3.txt"}));
-        ASSERT_EQ(readFile(liveBackupDir / "file1.txt"), "modified content");
-        ASSERT_EQ(readFile(liveBackupDir / "file3.txt"), "new file");
+        auto liveContents = GetDirectoryContents(liveBackupDir);
+        ASSERT_THAT(liveContents, testing::UnorderedElementsAreArray({"file1.txt", "file3.txt"})) << "Live backup should contain current files only";
+
+        std::string file1Content = ReadFile(liveBackupDir / "file1.txt");
+        ASSERT_EQ(file1Content, "modified content");
+
+        std::string file3Content = ReadFile(liveBackupDir / "file3.txt");
+        ASSERT_EQ(file3Content, "new file");
     }
 
     fs::path deletedDir = backupRoot / "deleted";
-    auto snapshots = ListDirectory(deletedDir);
-    ASSERT_THAT(snapshots, testing::SizeIs(1));
+    auto snapshotDirectories = ListDirectory(deletedDir);
+    ASSERT_THAT(snapshotDirectories, testing::SizeIs(1)) << "Deleted directory should contain one snapshot";
 
-    fs::path snapshotDir = deletedDir / snapshots[0];
+    fs::path snapshotDir = deletedDir / snapshotDirectories[0];
     {
-        auto contents = GetDirectoryContents(snapshotDir);
-        ASSERT_THAT(contents, testing::UnorderedElementsAreArray({"file1.txt", "file2.txt"}));
-        ASSERT_EQ(readFile(snapshotDir / "file1.txt"), "content1");
-        ASSERT_EQ(readFile(snapshotDir / "file2.txt"), "content2");
+        auto snapshotContents = GetDirectoryContents(snapshotDir);
+        ASSERT_THAT(snapshotContents, testing::UnorderedElementsAreArray({"file1.txt", "file2.txt"}))
+            << "Snapshot should contain previous versions of modified and deleted files";
+
+        std::string archivedFile1Content = ReadFile(snapshotDir / "file1.txt");
+        ASSERT_EQ(archivedFile1Content, "content1");
+
+        std::string archivedFile2Content = ReadFile(snapshotDir / "file2.txt");
+        ASSERT_EQ(archivedFile2Content, "content2");
     }
 }
 
@@ -201,31 +237,37 @@ TEST_F(E2ERunBackupTest, RunBackup_IncrementalBackup_TracksChanges)
 
 TEST_F(E2ERunBackupTest, RunBackup_UnchangedFile_IsNotModified)
 {
-    createFile(sourceDir / "test.txt", "initial content");
+    // Arrange
+    CreateFile(sourceDir / "test.txt", "initial content");
 
-    BackupConfig cfg;
-    cfg.sourceDir = sourceDir;
-    cfg.backupRoot = backupRoot;
-    cfg.databaseFile = dbPath;
+    BackupConfig configuration;
+    configuration.sourceDir = sourceDir;
+    configuration.backupRoot = backupRoot;
+    configuration.databaseFile = dbPath;
 
-    ASSERT_TRUE(RunBackup(cfg));
+    bool initialBackupResult = RunBackup(configuration);
+    ASSERT_TRUE(initialBackupResult);
 
     fs::path backupFile = backupRoot / "backup" / "test.txt";
-    ASSERT_TRUE(fs::exists(backupFile));
+    bool backupFileExists = fs::exists(backupFile);
+    ASSERT_TRUE(backupFileExists);
 
     auto originalTime = fs::last_write_time(backupFile);
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
-    bool result = RunBackup(cfg);
-    ASSERT_TRUE(result);
+    // Act
+    bool secondBackupResult = RunBackup(configuration);
+
+    // Assert
+    ASSERT_TRUE(secondBackupResult);
 
     auto newTime = fs::last_write_time(backupFile);
     ASSERT_EQ(originalTime, newTime);
 
     fs::path deletedDir = backupRoot / "deleted";
     {
-        auto contents = GetDirectoryContents(deletedDir);
-        ASSERT_THAT(contents, testing::IsEmpty());
+        auto deletedContents = GetDirectoryContents(deletedDir);
+        ASSERT_THAT(deletedContents, testing::IsEmpty()) << "Deleted directory should be empty when no files were deleted";
     }
 }
 
@@ -235,22 +277,28 @@ TEST_F(E2ERunBackupTest, RunBackup_UnchangedFile_IsNotModified)
 
 TEST_F(E2ERunBackupTest, RunBackup_SingleFileSource_CreatesBackupFile)
 {
-    fs::path filePath = sourceDir / "single.txt";
-    createFile(filePath, "single file content");
+    // Arrange
+    fs::path sourceFilePath = sourceDir / "single.txt";
+    CreateFile(sourceFilePath, "single file content");
 
-    BackupConfig cfg;
-    cfg.sourceDir = filePath;
-    cfg.backupRoot = backupRoot;
-    cfg.databaseFile = dbPath;
+    BackupConfig configuration;
+    configuration.sourceDir = sourceFilePath;
+    configuration.backupRoot = backupRoot;
+    configuration.databaseFile = dbPath;
 
-    bool result = RunBackup(cfg);
-    ASSERT_TRUE(result);
+    // Act
+    bool backupResult = RunBackup(configuration);
+
+    // Assert
+    ASSERT_TRUE(backupResult);
 
     fs::path backupFile = backupRoot / "backup" / "single.txt";
     {
-        auto contents = GetDirectoryContents(backupRoot / "backup");
-        ASSERT_THAT(contents, testing::UnorderedElementsAreArray({"single.txt"}));
-        ASSERT_EQ(readFile(backupFile), "single file content");
+        auto backupContents = GetDirectoryContents(backupRoot / "backup");
+        ASSERT_THAT(backupContents, testing::UnorderedElementsAreArray({"single.txt"})) << "Backup directory should contain the single file";
+
+        std::string fileContent = ReadFile(backupFile);
+        ASSERT_EQ(fileContent, "single file content");
     }
 }
 
@@ -260,37 +308,45 @@ TEST_F(E2ERunBackupTest, RunBackup_SingleFileSource_CreatesBackupFile)
 
 TEST_F(E2ERunBackupTest, RunBackup_AlreadyDeletedFile_IsNotArchivedAgain)
 {
-    fs::path filePath = sourceDir / "file.txt";
-    createFile(filePath, "content");
+    // Arrange
+    fs::path sourceFilePath = sourceDir / "file.txt";
+    CreateFile(sourceFilePath, "content");
 
-    BackupConfig cfg;
-    cfg.sourceDir = sourceDir;
-    cfg.backupRoot = backupRoot;
-    cfg.databaseFile = dbPath;
+    BackupConfig configuration;
+    configuration.sourceDir = sourceDir;
+    configuration.backupRoot = backupRoot;
+    configuration.databaseFile = dbPath;
 
-    ASSERT_TRUE(RunBackup(cfg));
+    bool initialBackupResult = RunBackup(configuration);
+    ASSERT_TRUE(initialBackupResult);
 
-    fs::remove(filePath);
-    ASSERT_TRUE(RunBackup(cfg));
+    fs::remove(sourceFilePath);
+    bool firstDeletionBackupResult = RunBackup(configuration);
+    ASSERT_TRUE(firstDeletionBackupResult);
 
-    bool result = RunBackup(cfg);
-    ASSERT_TRUE(result);
+    // Act
+    bool secondDeletionBackupResult = RunBackup(configuration);
+
+    // Assert
+    ASSERT_TRUE(secondDeletionBackupResult);
 
     fs::path deletedDir = backupRoot / "deleted";
-    auto snapshots = ListDirectory(deletedDir);
-    ASSERT_THAT(snapshots, testing::SizeIs(1));
+    auto snapshotDirectories = ListDirectory(deletedDir);
+    ASSERT_THAT(snapshotDirectories, testing::SizeIs(1)) << "Only one snapshot should exist for a single deletion event";
 
-    fs::path snapshotDir = deletedDir / snapshots[0];
-    ASSERT_TRUE(fs::is_directory(snapshotDir));
+    fs::path snapshotDir = deletedDir / snapshotDirectories[0];
+    bool snapshotIsDirectory = fs::is_directory(snapshotDir);
+    ASSERT_TRUE(snapshotIsDirectory);
     {
-        auto contents = GetDirectoryContents(snapshotDir);
-        ASSERT_THAT(contents, testing::UnorderedElementsAreArray({"file.txt"}));
+        auto snapshotContents = GetDirectoryContents(snapshotDir);
+        ASSERT_THAT(snapshotContents, testing::UnorderedElementsAreArray({"file.txt"})) << "Snapshot should contain the deleted file";
     }
 
     fs::path liveBackupDir = backupRoot / "backup";
-    ASSERT_TRUE(fs::exists(liveBackupDir));
+    bool liveBackupExists = fs::exists(liveBackupDir);
+    ASSERT_TRUE(liveBackupExists);
     {
-        auto contents = GetDirectoryContents(liveBackupDir);
-        ASSERT_THAT(contents, testing::IsEmpty());
+        auto liveContents = GetDirectoryContents(liveBackupDir);
+        ASSERT_THAT(liveContents, testing::IsEmpty()) << "Live backup directory should be empty after file deletion";
     }
 }

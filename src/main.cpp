@@ -19,55 +19,53 @@ int main(int argc, char* argv[])
         ("b,backup",  "Backup directory", cxxopts::value<std::string>())
         ("v,verbose", "Verbose output")
         ("h,help",    "Print help");
-    
+
     // clang-format on
 
-    auto result = options.parse(argc, argv);
+    auto parseResult = options.parse(argc, argv);
 
-    if ((result.count("help")) || (!result.count("source")) || (!result.count("backup")))
+    if ((parseResult.count("help")) || (!parseResult.count("source")) || (!parseResult.count("backup")))
     {
         std::cout << options.help() << '\n';
         return 0;
     }
 
-    BackupConfig configuration;
+    BackupConfig backupConfiguration;
 
-    configuration.sourceDir = fs::path(result["source"].as<std::string>());
-    configuration.backupRoot = fs::path(result["backup"].as<std::string>());
-    configuration.verbose = (result.count("verbose") > 0);
+    backupConfiguration.sourceDir = fs::path(parseResult["source"].as<std::string>());
+    backupConfiguration.backupRoot = fs::path(parseResult["backup"].as<std::string>());
+    backupConfiguration.verbose = (0 < parseResult.count("verbose"));
 
-    configuration.databaseFile = configuration.backupRoot / "backup.db";
+    backupConfiguration.databaseFile = backupConfiguration.backupRoot / "backup.db";
 
     std::error_code errorCode;
-    configuration.sourceDir = fs::canonical(configuration.sourceDir, errorCode);
-    if ((errorCode) || (!fs::is_directory(configuration.sourceDir)))
+    backupConfiguration.sourceDir = fs::canonical(backupConfiguration.sourceDir, errorCode);
+    if ((errorCode) || (!fs::is_directory(backupConfiguration.sourceDir)))
     {
         std::cerr << "Invalid source directory\n";
         return 1;
     }
 
-    fs::create_directories(configuration.backupRoot, errorCode);
+    fs::create_directories(backupConfiguration.backupRoot, errorCode);
     if (errorCode)
     {
         std::cerr << "Failed to create backup directory\n";
         return 1;
     }
 
-    if (configuration.verbose)
+    if (backupConfiguration.verbose)
     {
-        configuration.onProgress = [](const BackupProgress& progress)
-        {
-            std::cout << "[" << progress.stage << "] " << progress.processed << "/" << progress.total << " : " << progress.file << '\n';
-        };
+        backupConfiguration.onProgress = [](const BackupProgress& progress)
+        { std::cout << "[" << progress.stage << "] " << progress.processed << "/" << progress.total << " : " << progress.file << '\n'; };
     }
 
-    if (!RunBackup(configuration))
+    if (!RunBackup(backupConfiguration))
     {
         std::cerr << "Backup failed\n";
         return 1;
     }
 
-    if (configuration.verbose)
+    if (backupConfiguration.verbose)
     {
         std::cout << "Backup completed successfully\n";
     }
