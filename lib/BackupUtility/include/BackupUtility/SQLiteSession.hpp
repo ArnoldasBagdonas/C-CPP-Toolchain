@@ -12,6 +12,11 @@
 
 namespace fs = std::filesystem;
 
+// Forward declaration
+enum class ChangeType;
+const char* ChangeTypeToString(ChangeType changeType);
+ChangeType StringToChangeType(const std::string& stringValue);
+
 /**
  * @brief Thread-safe SQLite wrapper that provides a per-thread connection.
  *
@@ -112,6 +117,164 @@ class SQLiteSession
             throw std::runtime_error(sqlite3_errmsg(get()));
         }
         return statement;
+    }
+
+    /**
+     * @brief Initialize the database schema for file tracking.
+     *
+     * Creates the files table if it does not exist, with columns for path,
+     * hash, last_updated timestamp, and status.
+     *
+     * @return true if schema initialized successfully, false otherwise
+     */
+    bool InitializeSchema()
+    {
+        sqlite3* database = get();
+        if (nullptr == database)
+        {
+            return false;
+        }
+
+        static const char* SQL_CREATE_TABLE = "CREATE TABLE IF NOT EXISTS files ("
+                                              "path TEXT PRIMARY KEY,"
+                                              "hash TEXT NOT NULL,"
+                                              "last_updated TEXT NOT NULL,"
+                                              "status TEXT NOT NULL);";
+
+        return (SQLITE_OK == sqlite3_exec(database, SQL_CREATE_TABLE, nullptr, nullptr, nullptr));
+    }
+
+    /**
+     * @brief Update or insert file state information in the database.
+     *
+     * Uses INSERT with ON CONFLICT to update existing records or create new ones.
+     *
+     * @param[in] filePath Relative path of the file
+     * @param[in] fileHash Hash value of the file content
+     * @param[in] changeStatus Current change status of the file
+     * @param[in] timestamp Last update timestamp
+     * @return true if operation succeeded, false otherwise
+     */
+    bool UpdateFileState(const std::string& filePath, const std::string& fileHash, ChangeType changeStatus, const std::string& timestamp)
+    {
+        sqlite3* database = get();
+        if (nullptr == database)
+        {
+            return false;
+        }
+
+        sqlite3_stmt* statement = nullptr;
+
+        if (SQLITE_OK != sqlite3_prepare_v2(database,
+                                            "INSERT INTO files(path, hash, status, last_updated) "
+                                            "VALUES(?1, ?2, ?3, ?4) "
+                                            "ON CONFLICT(path) DO UPDATE SET "
+                                            "hash=excluded.hash, status=excluded.status, last_updated=excluded.last_updated;",
+                                            -1, &statement, nullptr))
+        {
+            return false;
+        }
+
+        sqlite3_bind_text(statement, 1, filePath.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement, 2, fileHash.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement, 3, ChangeTypeToString(changeStatus), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement, 4, timestamp.c_str(), -1, SQLITE_TRANSIENT);
+
+        bool operationSucceeded = (SQLITE_DONE == sqlite3_step(statement));
+        sqlite3_finalize(statement);
+        return operationSucceeded;
+    }
+
+    /**
+     * @brief Retrieve stored file state information from the database.
+     *
+     * @param[in] filePath Relative path of the file to query
+     * @param[out] outputHash Retrieved hash value
+     * @param[out] outputStatus Retrieved change status
+     * @param[out] outputTimestamp Retrieved last update timestamp
+     * @return true if file record was found, false otherwise
+     */
+    bool GetFileState(const std::string& filePath, std::string& outputHash, ChangeType& outputStatus, std::string& outputTimestamp)
+    {
+        sqlite3* database = get();
+        if (nullptr == database)
+        {
+            return false;
+        }
+
+        sqlite3_stmt* statement = nullptr;
+        if (SQLITE_OK != sqlite3_prepare_v2(database, "SELECT hash, status, last_updated FROM files WHERE path=?1;", -1, &statement, nullptr))
+        {
+            return false;
+        }
+
+        sqlite3_bind_text(statement, 1, filePath.c_str(), -1, SQLITE_TRANSIENT);
+
+        bool recordFound = false;
+        if (SQLITE_ROW == sqlite3_step(statement))
+        {
+            const char* hashText = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
+            const char* statusText = reinterpret_cast<const char*>(sqlite3_column_text(statement, 1));
+            const char* timestampText = reinterpret_cast<const char*>(sqlite3_column_text(statement, 2));
+
+            if ((nullptr != hashText) && (nullptr != statusText) && (nullptr != timestampText))
+            {
+                outputHash = hashText;
+                outputStatus = StringToChangeType(statusText);
+                outputTimestamp = timestampText;
+                recordFound = true;
+            }
+        }
+
+        sqlite3_finalize(statement);
+        return recordFound;
+    }
+
+    /**
+     * @brief Get all files from the database.
+     *
+     * @param[out] statement Pointer to receive the prepared statement
+     * @return true if query prepared successfully, false otherwise
+     */
+    bool GetAllFiles(sqlite3_stmt** statement)
+    {
+        sqlite3* database = get();
+        if ((nullptr == database) || (nullptr == statement))
+        {
+            return false;
+        }
+
+        return (SQLITE_OK == sqlite3_prepare_v2(database, "SELECT path, status FROM files;", -1, statement, nullptr));
+    }
+
+    /**
+     * @brief Update file status to deleted.
+     *
+     * @param[in] filePath Relative path of the file
+     * @param[in] timestamp Deletion timestamp
+     * @return true if operation succeeded, false otherwise
+     */
+    bool MarkFileAsDeleted(const std::string& filePath, const std::string& timestamp)
+    {
+        sqlite3* database = get();
+        if (nullptr == database)
+        {
+            return false;
+        }
+
+        sqlite3_stmt* statement = nullptr;
+        if (SQLITE_OK != sqlite3_prepare_v2(database, "UPDATE files SET status=?1, last_updated=?2 WHERE path=?3;", -1, &statement, nullptr))
+        {
+            return false;
+        }
+
+        sqlite3_bind_text(statement, 1, ChangeTypeToString(ChangeType::Deleted), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement, 2, timestamp.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement, 3, filePath.c_str(), -1, SQLITE_TRANSIENT);
+
+        bool operationSucceeded = (SQLITE_DONE == sqlite3_step(statement));
+        sqlite3_finalize(statement);
+        return operationSucceeded;
     }
 
   private:

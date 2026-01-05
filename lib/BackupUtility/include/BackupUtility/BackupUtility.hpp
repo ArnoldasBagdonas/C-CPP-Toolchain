@@ -13,10 +13,10 @@ namespace fs = std::filesystem;
  */
 enum class ChangeType
 {
-    Unchanged,  /**< File has not changed since last backup */
-    Added,      /**< File is new and was not present in previous backup */
-    Modified,   /**< File exists but content has changed */
-    Deleted     /**< File was present before but has been removed */
+    Unchanged, /**< File has not changed since last backup */
+    Added,     /**< File is new and was not present in previous backup */
+    Modified,  /**< File exists but content has changed */
+    Deleted    /**< File was present before but has been removed */
 };
 
 /**
@@ -73,10 +73,10 @@ inline ChangeType StringToChangeType(const std::string& stringValue)
  */
 struct BackupProgress
 {
-    const char* stage;          /**< Current stage of backup operation */
-    std::size_t processed;      /**< Number of items processed so far */
-    std::size_t total;          /**< Total number of items to process */
-    fs::path file;              /**< Currently processing file path */
+    const char* stage;     /**< Current stage of backup operation */
+    std::size_t processed; /**< Number of items processed so far */
+    std::size_t total;     /**< Total number of items to process */
+    fs::path file;         /**< Currently processing file path */
 };
 
 /**
@@ -84,22 +84,18 @@ struct BackupProgress
  */
 struct BackupConfig
 {
-    fs::path sourceDir;         /**< Source directory to back up */
-    fs::path backupRoot;        /**< Root directory for backup storage */
-    fs::path databaseFile;      /**< Path to SQLite database file for tracking state */
+    fs::path sourceDir;    /**< Source directory to back up */
+    fs::path backupRoot;   /**< Root directory for backup storage */
+    fs::path databaseFile; /**< Path to SQLite database file for tracking state */
 
-    bool verbose;               /**< Enable verbose progress output */
+    bool verbose; /**< Enable verbose progress output */
 
-    std::function<void(const BackupProgress&)> onProgress;  /**< Optional callback for progress notifications */
+    std::function<void(const BackupProgress&)> onProgress; /**< Optional callback for progress notifications */
 
     /**
      * @brief Initialize configuration with default values.
      */
-    BackupConfig()
-        : verbose(false)
-        , onProgress(nullptr)
-    {
-    }
+    BackupConfig() : verbose(false), onProgress(nullptr) {}
 };
 
 /**
