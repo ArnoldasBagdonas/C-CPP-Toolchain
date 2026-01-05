@@ -1,101 +1,157 @@
 # C-CPP Toolchain
 
-directory layout
+The repository includes a small, self-contained backup utility inspired by [rdiff-backup](https://rdiff-backup.net/). The utility is intentionally simplified and exists to exercise the toolchain rather than to serve as a production-grade backup solution. `rdemo-backup` is a reference-quality C++17 project whose primary purpose is to demonstrate a modern, cross-platform C/C++ toolchain built with CMake. It targets professional developers working on Linux and Windows with GCC, Clang, or MSVC.
+
+A Docker-based development environment is provided with tooling for static analysis, sanitizers, coverage, documentation, and diagram generation.
+
+## Inspiration and backup model
+This project is conceptually inspired by `rdiff-backup`, which tracks file history over time and allows recovery of previous versions. Unlike `rdiff-backup`, this utility **does not store deltas**.
+
+Instead, it uses a **full-file snapshot model**:
+
+- Files are copied in full when added or modified
+- Previous versions of modified or deleted files are archived into timestamped snapshot directories
+- An embedded SQLite database tracks file state across runs
+
+This approach trades storage efficiency for simplicity, transparency, and direct filesystem access. Backed-up files remain readable and usable without requiring the utility itself or any proprietary format.
+
+## Design highlights and techniques
+
+### Incremental backups via content hashing
+
+File changes are detected using the [xxHash](https://github.com/Cyan4973/xxHash) algorithm (`XXH64`) rather than timestamps or file sizes. This avoids false positives and keeps comparisons fast even for large files.
+
+### Thread-per-core file processing with work queues
+
+Files are streamed into a shared queue and processed by a worker pool sized to `std::thread::hardware_concurrency()`. This avoids pre-enumerating all files and keeps memory usage predictable.
+
+### Lazy snapshot creation using `std::call_once`
+
+Snapshot directories for modified or deleted files are created only when needed, using `std::once_flag` and `std::call_once`. This avoids unnecessary filesystem writes when no changes occur.
+
+Reference: [https://en.cppreference.com/w/cpp/thread/call_once.html](https://en.cppreference.com/w/cpp/thread/call_once.html)
+
+### Thread-safe SQLite access with per-thread connections
+
+Each worker thread transparently receives its own SQLite connection, avoiding global locks while maintaining consistency via SQLite WAL mode.
+
+References:
+
+- [https://www.sqlite.org/threadsafe.html](https://www.sqlite.org/threadsafe.html)
+
+- [https://www.sqlite.org/wal.html](https://www.sqlite.org/wal.html)
+
+### Write-ahead logging (WAL) for concurrent writes
+
+SQLite is configured with PRAGMA journal_mode=WAL to support concurrent readers and writers without blocking.
+
+### Portable filesystem handling using `std::filesystem`
+
+All path normalization, directory traversal, and file copying use the standard C++ filesystem library.
+
+Reference: [https://en.cppreference.com/w/cpp/filesystem](https://en.cppreference.com/w/cpp/filesystem)
+
+### Command-line parsing with a header-only library
+
+CLI options are handled via [cxxopts](https://github.com/jarro2783/cxxopts), keeping the executable lightweight and dependency management simple.
+
+### Builds with CMake
+
+The project enforces C++17, disables compiler extensions, centralizes compiler flags, and cleanly separates third-party dependencies.
+
+## Toolchain features demonstrated
+
+The repository is designed to showcase a realistic C/C++ development setup, including:
+
+- Multiple build types (Debug, Release, Coverage).
+
+- Clang-format enforcement.
+
+- Sanitizers:
+
+    - AddressSanitizer (ASan).
+
+    - ThreadSanitizer (TSan).
+
+    - UndefinedBehaviorSanitizer (UBSan).
+
+    - MemorySanitizer (MSan, Clang/Linux).
+
+- Valgrind integration (Linux).
+
+- Code coverage for GCC, Clang, and MSVC.
+
+## Fonts included in the development container
+
+The Docker environment installs fonts commonly used for documentation and diagrams:
+
+- Cantarell – https://gitlab.gnome.org/GNOME/cantarell-fonts
+
+- Roboto – https://fonts.google.com/specimen/Roboto
+
+- GNU FreeFont (OTF) – https://www.gnu.org/software/freefont/
+
+- Ubuntu Font Family – https://design.ubuntu.com/font
+
+Microsoft Core Fonts are also installed manually for compatibility with legacy documents:
+https://sourceforge.net/projects/corefonts/
+
+## Project structure
 
 ```
-backup_root/
-├── current/
-├── history/
-│   └── YYYY-MM-DD_HH-MM-SS/
-└── backup.db
+c-cpp-toolchain/
+├── .clang-format           # Configuration for code formatting
+├── .copilot/               # Instructions and configurations for Copilot
+├── .devcontainer/          # Configuration for development container environment (Dev Containers)
+├── .git/                   # Git version control system files
+├── .vscode/                # VS Code editor specific settings and configurations
+├── build/                  # Default output directory for build artifacts (executables, libraries, etc.)
+├── cmake/                  # Custom CMake modules and scripts for build configuration
+├── lib/                    # Contains source code for reusable libraries, including BackupUtility
+│   └── BackupUtility/      # The core backup utility library
+│       ├── include/        # Public header files for BackupUtility
+│       └── src/            # Source files for BackupUtility
+├── scripts/                # Utility scripts (e.g., Valgrind integration)
+├── src/                    # Main application source code (e.g., rdemo-backup entry point)
+├── tests/                  # Unit and integration tests for the project
+│   ├── helpers/            # Helper utilities for writing tests
+│   ├── mocks/              # Mock objects for testing
+│   ├── src/                # Test source files
+│   └── stubs/              # Stub implementations for testing
+└── third_party/            # External dependencies, managed by CMake's FetchContent
+    └── sqlite3/            # SQLite3 library source
 ```
 
-## Getting started
+## Building `rdemo-backup`
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+This project uses CMake for its build system. To build the `rdemo-backup` utility, follow these standard steps:
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+1.  **Create a build directory:** It's recommended to build out-of-source.
+    ```bash
+    mkdir build
+    cd build
+    ```
+2.  **Configure the project with CMake:** This generates the build files for your chosen generator (e.g., Makefiles, Visual Studio projects).
+    ```bash
+    cmake ..
+    ```
+    You can specify a build type (e.g., `Debug`, `Release`, `Coverage`) using the `-DCMAKE_BUILD_TYPE` option:
+    ```bash
+    cmake .. -DCMAKE_BUILD_TYPE=Release
+    ```
+3.  **Build the project:**
+    ```bash
+    cmake --build .
+    ```
+    This will compile the `rdemo-backup` executable and any associated libraries. The executable will typically be found in `build/`.
 
-## Add your files
+## Command Line Options
 
-* [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+The `rdemo-backup` utility supports the following command-line options:
 
-```
-cd existing_repo
-git remote add origin https://gitlab.com/bagdoportfolio/c-cpp-toolchain.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-* [Set up project integrations](https://gitlab.com/bagdoportfolio/c-cpp-toolchain/-/settings/integrations)
-
-## Collaborate with your team
-
-* [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+*   `-s, --source <path>`: Specifies the source directory to be backed up.
+*   `-b, --backup <path>`: Specifies the destination directory where backups will be stored.
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
