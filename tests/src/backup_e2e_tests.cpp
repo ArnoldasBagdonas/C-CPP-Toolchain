@@ -54,17 +54,9 @@ class E2ERunBackupTest : public ::testing::Test
     std::string readFile(const fs::path& path)
     {
         std::ifstream ifs(path, std::ios::binary);
-        EXPECT_TRUE(ifs.good()) << "Failed to open file: " << path;
         std::stringstream buffer;
         buffer << ifs.rdbuf();
         return buffer.str();
-    }
-
-    void ExpectBackupContents(const fs::path& dir, std::initializer_list<std::string> expected)
-    {
-        auto rawContents = GetDirectoryContents(dir); // returns vector<fs::path> or vector<string>
-        auto contents = NormalizePaths(rawContents);   // normalize all paths to /
-        EXPECT_THAT(contents, testing::UnorderedElementsAreArray(expected)) << "Backup contents mismatch in " << dir;
     }
 };
 
@@ -84,11 +76,17 @@ TEST_F(E2ERunBackupTest, RunBackup_WithNonExistentSource_ReturnsFalse)
 
     fs::path liveBackupDir = backupRoot / "backup";
     if (fs::exists(liveBackupDir))
-        ExpectBackupContents(liveBackupDir, {});
+    {
+        auto contents = GetDirectoryContents(liveBackupDir);
+        ASSERT_THAT(contents, testing::IsEmpty());
+    }
 
     fs::path deletedDir = backupRoot / "deleted";
     if (fs::exists(deletedDir))
-        ExpectBackupContents(deletedDir, {});
+    {
+        auto contents = GetDirectoryContents(deletedDir);
+        ASSERT_THAT(contents, testing::IsEmpty());
+    }
 }
 
 TEST_F(E2ERunBackupTest, RunBackup_WithEmptySource_CreatesEmptyBackup)
@@ -103,11 +101,17 @@ TEST_F(E2ERunBackupTest, RunBackup_WithEmptySource_CreatesEmptyBackup)
 
     fs::path liveBackupDir = backupRoot / "backup";
     ASSERT_TRUE(fs::exists(liveBackupDir));
-    ExpectBackupContents(liveBackupDir, {});
+    {
+        auto contents = GetDirectoryContents(liveBackupDir);
+        ASSERT_THAT(contents, testing::IsEmpty());
+    }
 
     fs::path deletedDir = backupRoot / "deleted";
     ASSERT_TRUE(fs::exists(deletedDir));
-    ExpectBackupContents(deletedDir, {});
+    {
+        auto contents = GetDirectoryContents(deletedDir);
+        ASSERT_THAT(contents, testing::IsEmpty());
+    }
 
     ASSERT_TRUE(fs::exists(dbPath));
 }
@@ -132,14 +136,19 @@ TEST_F(E2ERunBackupTest, RunBackup_InitialBackup_CopiesAllFiles)
     fs::path liveBackupDir = backupRoot / "backup";
     ASSERT_TRUE(fs::exists(liveBackupDir));
 
-    ExpectBackupContents(liveBackupDir, {"file1.txt", "subdir", "subdir/file2.txt"});
-
-    EXPECT_EQ(readFile(liveBackupDir / "file1.txt"), "content1");
-    EXPECT_EQ(readFile(liveBackupDir / "subdir" / "file2.txt"), "content2");
+    {
+        auto contents = GetDirectoryContents(liveBackupDir);
+        ASSERT_THAT(contents, testing::UnorderedElementsAreArray({"file1.txt", "subdir", "subdir/file2.txt"}));
+        ASSERT_EQ(readFile(liveBackupDir / "file1.txt"), "content1");
+        ASSERT_EQ(readFile(liveBackupDir / "subdir" / "file2.txt"), "content2");
+    }
 
     fs::path deletedDir = backupRoot / "deleted";
     ASSERT_TRUE(fs::exists(deletedDir));
-    ExpectBackupContents(deletedDir, {});
+    {
+        auto contents = GetDirectoryContents(deletedDir);
+        ASSERT_THAT(contents, testing::IsEmpty());
+    }
 }
 
 /* ============================================================================ */
@@ -164,16 +173,14 @@ TEST_F(E2ERunBackupTest, RunBackup_IncrementalBackup_TracksChanges)
 
     bool result = RunBackup(cfg);
     ASSERT_TRUE(result);
-    
+
     fs::path liveBackupDir = backupRoot / "backup";
     {
-        auto rawContents = GetDirectoryContents(liveBackupDir);
-        auto contents = NormalizePaths(rawContents);
+        auto contents = GetDirectoryContents(liveBackupDir);
         ASSERT_THAT(contents, testing::UnorderedElementsAreArray({"file1.txt", "file3.txt"}));
+        ASSERT_EQ(readFile(liveBackupDir / "file1.txt"), "modified content");
+        ASSERT_EQ(readFile(liveBackupDir / "file3.txt"), "new file");
     }
-
-    ASSERT_EQ(readFile(liveBackupDir / "file1.txt"), "modified content");
-    ASSERT_EQ(readFile(liveBackupDir / "file3.txt"), "new file");
 
     fs::path deletedDir = backupRoot / "deleted";
     auto snapshots = ListDirectory(deletedDir);
@@ -181,12 +188,11 @@ TEST_F(E2ERunBackupTest, RunBackup_IncrementalBackup_TracksChanges)
 
     fs::path snapshotDir = deletedDir / snapshots[0];
     {
-        auto rawContents = GetDirectoryContents(snapshotDir);
-        auto contents = NormalizePaths(rawContents);
+        auto contents = GetDirectoryContents(snapshotDir);
         ASSERT_THAT(contents, testing::UnorderedElementsAreArray({"file1.txt", "file2.txt"}));
+        ASSERT_EQ(readFile(snapshotDir / "file1.txt"), "content1");
+        ASSERT_EQ(readFile(snapshotDir / "file2.txt"), "content2");
     }
-    ASSERT_EQ(readFile(snapshotDir / "file1.txt"), "content1");
-    ASSERT_EQ(readFile(snapshotDir / "file2.txt"), "content2");
 }
 
 /* ============================================================================ */
@@ -214,10 +220,13 @@ TEST_F(E2ERunBackupTest, RunBackup_UnchangedFile_IsNotModified)
     ASSERT_TRUE(result);
 
     auto newTime = fs::last_write_time(backupFile);
-    EXPECT_EQ(originalTime, newTime);
+    ASSERT_EQ(originalTime, newTime);
 
     fs::path deletedDir = backupRoot / "deleted";
-    ExpectBackupContents(deletedDir, {});
+    {
+        auto contents = GetDirectoryContents(deletedDir);
+        ASSERT_THAT(contents, testing::IsEmpty());
+    }
 }
 
 /* ============================================================================ */
@@ -238,8 +247,11 @@ TEST_F(E2ERunBackupTest, RunBackup_SingleFileSource_CreatesBackupFile)
     ASSERT_TRUE(result);
 
     fs::path backupFile = backupRoot / "backup" / "single.txt";
-    ExpectBackupContents(backupRoot / "backup", {"single.txt"});
-    EXPECT_EQ(readFile(backupFile), "single file content");
+    {
+        auto contents = GetDirectoryContents(backupRoot / "backup");
+        ASSERT_THAT(contents, testing::UnorderedElementsAreArray({"single.txt"}));
+        ASSERT_EQ(readFile(backupFile), "single file content");
+    }
 }
 
 /* ============================================================================ */
@@ -270,9 +282,15 @@ TEST_F(E2ERunBackupTest, RunBackup_AlreadyDeletedFile_IsNotArchivedAgain)
 
     fs::path snapshotDir = deletedDir / snapshots[0];
     ASSERT_TRUE(fs::is_directory(snapshotDir));
-    ExpectBackupContents(snapshotDir, {"file.txt"});
+    {
+        auto contents = GetDirectoryContents(snapshotDir);
+        ASSERT_THAT(contents, testing::UnorderedElementsAreArray({"file.txt"}));
+    }
 
     fs::path liveBackupDir = backupRoot / "backup";
     ASSERT_TRUE(fs::exists(liveBackupDir));
-    ExpectBackupContents(liveBackupDir, {});
+    {
+        auto contents = GetDirectoryContents(liveBackupDir);
+        ASSERT_THAT(contents, testing::IsEmpty());
+    }
 }

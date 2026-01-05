@@ -7,6 +7,20 @@
 
 namespace fs = std::filesystem;
 
+// Helper to normalize Linux / Windows path symbols
+inline std::vector<std::string> NormalizePaths(const std::vector<std::string>& paths)
+{
+    std::vector<std::string> normalized;
+    for (const auto& p : paths)
+    {
+        std::string s = p;
+        std::replace(s.begin(), s.end(), '\\', '/'); // convert Windows backslash to slash
+        normalized.push_back(s);
+    }
+    return normalized;
+}
+
+
 // Helper to get directory contents as a sorted vector of strings
 inline std::vector<std::string> GetDirectoryContents(const fs::path& dir)
 {
@@ -19,8 +33,9 @@ inline std::vector<std::string> GetDirectoryContents(const fs::path& dir)
         }
     }
     std::sort(contents.begin(), contents.end());
-    return contents;
+    return NormalizePaths(contents);
 }
+
 
 // Helper to get directory contents non-recursively
 inline std::vector<std::string> ListDirectory(const fs::path& dir)
@@ -37,15 +52,3 @@ inline std::vector<std::string> ListDirectory(const fs::path& dir)
     return contents;
 }
 
-// Helper to normalize Linux / Windows path symbols
-inline std::vector<std::string> NormalizePaths(const std::vector<std::string>& paths)
-{
-    std::vector<std::string> normalized;
-    for (const auto& p : paths)
-    {
-        std::string s = p;
-        std::replace(s.begin(), s.end(), '\\', '/'); // convert Windows backslash to slash
-        normalized.push_back(s);
-    }
-    return normalized;
-}
