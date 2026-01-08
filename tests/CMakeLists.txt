@@ -16,96 +16,127 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+include(GoogleTest)
+
+# ---------------------------------------------------------------------------
+# Configure sanitizer environment variables
+# ---------------------------------------------------------------------------
+set(SANITIZER_ENV "")
+if(PROJECT_BUILD_VARIANT STREQUAL "ADDRESSSANITIZER")
+    set(SANITIZER_ENV "ASAN_OPTIONS=abort_on_error=1:exitcode=42:detect_leaks=1:detect_invalid_pointer_pairs=1:detect_stack_use_after_return=1")
+elseif(PROJECT_BUILD_VARIANT STREQUAL "THREADSANITIZER")
+    set(SANITIZER_ENV "TSAN_OPTIONS=halt_on_error=1:exitcode=42")
+elseif(PROJECT_BUILD_VARIANT STREQUAL "MEMORYSANITIZER")
+    set(SANITIZER_ENV "MSAN_OPTIONS=abort_on_error=1:exitcode=42")
+endif()
+
+# ---------------------------------------------------------------------------
+# Helper: add a GoogleTest executable with standard settings
+# ---------------------------------------------------------------------------
+function(rdemo_add_gtest_executable TARGET_NAME)
+    cmake_parse_arguments(ARG "" "" "SOURCES;LIBRARIES" ${ARGN})
+
+    add_executable(${TARGET_NAME} ${ARG_SOURCES})
+
+    target_link_libraries(${TARGET_NAME}
+        PRIVATE
+            gtest
+            gmock
+            ${ARG_LIBRARIES}
+    )
+
+    target_include_directories(${TARGET_NAME}
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+
+    set_target_flags(${TARGET_NAME})
+endfunction()
+
+# ---------------------------------------------------------------------------
+# Helper: register GoogleTests in a uniform way
+# ---------------------------------------------------------------------------
+function(rdemo_register_gtests TARGET_NAME)
+    gtest_discover_tests(${TARGET_NAME}
+        PROPERTIES
+            ENVIRONMENT "${SANITIZER_ENV}"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+            RUN_SERIAL 1
+            TIMEOUT 30
+    )
+endfunction()
+
+
 # ---------------------------------------------------------------------------
 # Test sources
 # ---------------------------------------------------------------------------
-set(TEST_SOURCES
+set(UNIT_TEST_SOURCES
     src/main.cpp
     src/backup_e2e_tests.cpp
     src/backup_change_type_tests.cpp
 )
 
-# Optional sanitizer test sources
-string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_TYPE_UPPER)
-if(BUILD_TYPE_UPPER MATCHES "VALGRIND|ADDRESSSANITIZER|THREADSANITIZER|MEMORYSANITIZER|UNDEFINEDBEHAVIORSANITIZER")
-    # list(APPEND TEST_SOURCES src/sanitizer_tests.cpp)
-endif()
-
-# ---------------------------------------------------------------------------
-# Create test executable
-# ---------------------------------------------------------------------------
-add_executable(unit_tests ${TEST_SOURCES})
-
-target_include_directories(unit_tests
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-# Apply target-specific compiler/linker flags (defined in root CMake)
-set_target_flags(unit_tests)
-
-# Link dependencies
-target_link_libraries(unit_tests
-    PRIVATE
-        gmock
-        rdemo_backup::BackupUtility
-        sqlite3
-        xxhash_static
+set(SANITIZER_TEST_SOURCES
+    src/main.cpp
+    src/sanitizer_tests.cpp
 )
 
 # ---------------------------------------------------------------------------
-# GoogleTest integration
+# Define test executables
 # ---------------------------------------------------------------------------
-include(GoogleTest)
-
-# Configure sanitizer environment variables
-set(SANITIZER_ENV "")
-if(BUILD_TYPE_UPPER STREQUAL "ADDRESSSANITIZER")
-    set(SANITIZER_ENV "ASAN_OPTIONS=abort_on_error=1:exitcode=42:detect_leaks=1:detect_invalid_pointer_pairs=1:detect_stack_use_after_return=1")
-elseif(BUILD_TYPE_UPPER STREQUAL "THREADSANITIZER")
-    set(SANITIZER_ENV "TSAN_OPTIONS=halt_on_error=1:exitcode=42")
-elseif(BUILD_TYPE_UPPER STREQUAL "MEMORYSANITIZER")
-    set(SANITIZER_ENV "MSAN_OPTIONS=abort_on_error=1:exitcode=42")
-endif()
-
-# Discover and run tests, one at a time for thread safety with sanitizers
-gtest_discover_tests(unit_tests
-    PROPERTIES
-        ENVIRONMENT "${SANITIZER_ENV}"
-        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-        RUN_SERIAL 1
-        TIMEOUT 30
+rdemo_add_gtest_executable(unit_tests
+    SOURCES   ${UNIT_TEST_SOURCES}
+    LIBRARIES rdemo_backup::BackupUtility sqlite3 xxhash_static
 )
+
+rdemo_add_gtest_executable(sanitizer_tests
+    SOURCES ${SANITIZER_TEST_SOURCES}
+)
+
+# ---------------------------------------------------------------------------
+# Register tests
+# ---------------------------------------------------------------------------
+rdemo_register_gtests(unit_tests)
+rdemo_register_gtests(sanitizer_tests)
 
 # ---------------------------------------------------------------------------
 # Valgrind integration (Linux)
 # ---------------------------------------------------------------------------
-if(BUILD_TYPE_UPPER STREQUAL "VALGRIND")
+if(PROJECT_BUILD_VARIANT STREQUAL "VALGRIND")
     find_program(VALGRIND_EXECUTABLE valgrind REQUIRED)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
-    set(VALGRIND_XML "${CMAKE_CURRENT_BINARY_DIR}/valgrind.xml")
+    # Function to create Valgrind test targets
+    function(add_valgrind_test TARGET_NAME)
+        set(VALGRIND_XML "${CMAKE_CURRENT_BINARY_DIR}/valgrind_${TARGET_NAME}.xml")
 
-    # Wrapper to run tests under Valgrind
-    add_custom_target(Valgrind.UnitTestsRun
-        COMMAND ${CMAKE_COMMAND} -E echo "Running unit_tests under Valgrind (segfaults ignored)..."
-        COMMAND ${CMAKE_SOURCE_DIR}/scripts/run_valgrind.sh
-                ${VALGRIND_EXECUTABLE}
-                ${VALGRIND_XML}
-                $<TARGET_FILE:unit_tests>
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Run unit_tests under Valgrind ignoring segfaults"
-        VERBATIM
-    )
-    set_property(TARGET Valgrind.UnitTestsRun PROPERTY FATAL_ERROR 0)
+        # Wrapper to run tests under Valgrind
+        add_custom_target(Valgrind.${TARGET_NAME}.Run
+            COMMAND ${CMAKE_COMMAND} -E echo "Running ${TARGET_NAME} under Valgrind..."
+            COMMAND ${CMAKE_SOURCE_DIR}/scripts/run_valgrind.sh
+                    ${VALGRIND_EXECUTABLE}
+                    ${VALGRIND_XML}
+                    $<TARGET_FILE:${TARGET_NAME}>
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Run ${TARGET_NAME} under Valgrind"
+            VERBATIM
+        )
+        set_property(TARGET Valgrind.${TARGET_NAME}.Run PROPERTY FATAL_ERROR 0)
 
-    # Parse Valgrind XML results
-    add_custom_target(Valgrind.UnitTestsRun.ParseXML
-        COMMAND ${CMAKE_COMMAND} -E echo "Parsing Valgrind XML..."
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/valgrindXML.py ${VALGRIND_XML}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Parsing Valgrind XML after tests"
-        VERBATIM
-    )
-    add_dependencies(Valgrind.UnitTestsRun.ParseXML Valgrind.UnitTestsRun)
+        # Parse Valgrind XML results
+        add_custom_target(Valgrind.${TARGET_NAME}.ParseXML
+            COMMAND ${CMAKE_COMMAND} -E echo "Parsing Valgrind XML for ${TARGET_NAME}..."
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/valgrindXML.py ${VALGRIND_XML}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Parsing Valgrind XML for ${TARGET_NAME}"
+            VERBATIM
+        )
+        add_dependencies(Valgrind.${TARGET_NAME}.ParseXML Valgrind.${TARGET_NAME}.Run)
+    endfunction()
+
+    # Create Valgrind targets for both test executables
+    add_valgrind_test(unit_tests)
+    if(TARGET sanitizer_tests)
+      add_valgrind_test(sanitizer_tests)
+    endif()
 endif()
