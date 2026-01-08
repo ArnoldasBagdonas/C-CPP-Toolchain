@@ -20,6 +20,13 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # ----------------------------------------------------------------------------- 
 include(cmake/build_types.cmake)
 
+# Normalize build type once, project-wide
+if(CMAKE_BUILD_TYPE)
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" PROJECT_BUILD_VARIANT)
+else()
+    set(PROJECT_BUILD_VARIANT "")
+endif()
+
 # ----------------------------------------------------------------------------- 
 # Compiler flags helper
 # ----------------------------------------------------------------------------- 
@@ -65,7 +72,7 @@ include(cmake/clang_format.cmake)
 # ----------------------------------------------------------------------------- 
 # Code coverage (only for Coverage build type)
 # ----------------------------------------------------------------------------- 
-if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
+if(PROJECT_BUILD_VARIANT STREQUAL "COVERAGE")
     if(MSVC)
         include(cmake/coverage/msvc_coverage.cmake)
     elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
@@ -74,3 +81,11 @@ if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
         include(cmake/coverage/gcc_coverage.cmake)
     endif()
 endif()
+
+# ----------------------------------------------------------------------------- 
+# Reinitialize everything
+# ----------------------------------------------------------------------------- 
+add_custom_target(reconfigure
+    COMMAND ${CMAKE_COMMAND} -S "${CMAKE_SOURCE_DIR}" -B "${CMAKE_BINARY_DIR}"
+    COMMENT "Re-running CMake configure step"
+)
