@@ -12,9 +12,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Ensure position-independent code for static/shared libraries
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
 # ----------------------------------------------------------------------------- 
 # Build type setup
 # ----------------------------------------------------------------------------- 
@@ -81,11 +78,3 @@ if(PROJECT_BUILD_VARIANT STREQUAL "COVERAGE")
         include(cmake/coverage/gcc_coverage.cmake)
     endif()
 endif()
-
-# ----------------------------------------------------------------------------- 
-# Reinitialize everything
-# ----------------------------------------------------------------------------- 
-add_custom_target(reconfigure
-    COMMAND ${CMAKE_COMMAND} -S "${CMAKE_SOURCE_DIR}" -B "${CMAKE_BINARY_DIR}"
-    COMMENT "Re-running CMake configure step"
-)
