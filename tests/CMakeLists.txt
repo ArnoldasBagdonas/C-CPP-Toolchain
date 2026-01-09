@@ -2,20 +2,6 @@
 # tests/CMakeLists.txt — Unit tests for rdemo_backup module
 # =============================================================================
 
-# ---------------------------------------------------------------------------
-# Fetch Google Test
-# ---------------------------------------------------------------------------
-include(FetchContent)
-
-set(FETCHCONTENT_QUIET OFF) # verbose FetchContent for debugging
-
-FetchContent_Declare(
-    googletest
-    URL https://github.com/google/googletest/archive/refs/tags/release-1.12.1.tar.gz
-)
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
-
 include(GoogleTest)
 
 # ---------------------------------------------------------------------------
