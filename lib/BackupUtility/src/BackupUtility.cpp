@@ -1,5 +1,4 @@
-// file BackupUtility.cpp:
-
+// file BackupUtility.cpp
 #include "BackupUtility/BackupUtility.hpp"
 #include "BackupUtility/SQLiteSession.hpp"
 
@@ -13,7 +12,6 @@
 #include <queue>
 #include <sstream>
 #include <thread>
-#include <unordered_map>
 #include <vector>
 
 #include <sqlite3.h>
@@ -107,97 +105,6 @@ static fs::path CreateSnapshotDirectory(const fs::path& historyRootPath)
 }
 
 /**
- * @brief Process a single file for backup.
- *
- * Computes file hash, compares with stored state, archives previous version if changed,
- * and updates the current backup directory and database.
- *
- * @param[in] filePath Absolute path to source file
- * @param[in] sourceFolderPath Root directory of source files
- * @param[in] backupFolderPath Current backup directory path
- * @param[in] createSnapshotPathOnce Lazy initialization function for snapshot creation
- * @param[in] databaseSession SQLite session for database operations
- * @param[in] onProgressCallback Optional progress callback function
- * @param[in/out] processedCount Counter for processed files
- * @return true if file processed successfully, false otherwise
- */
-static bool ProcessFile(const fs::path& filePath, const fs::path& sourceFolderPath, const fs::path& backupFolderPath,
-                        std::function<fs::path()> createSnapshotPathOnce, SQLiteSession& databaseSession,
-                        std::function<void(const BackupProgress&)> onProgressCallback, std::atomic<std::size_t>& processedCount)
-{
-    std::error_code errorCode;
-    fs::path relativeFilePath = fs::relative(filePath, sourceFolderPath, errorCode);
-    if (errorCode)
-    {
-        return false;
-    }
-
-    // Handle single-file-in-root case
-    if ("." == relativeFilePath)
-    {
-        relativeFilePath = filePath.filename();
-    }
-
-    fs::path currentFilePath = backupFolderPath / relativeFilePath;
-
-    std::string newHash;
-    if (!ComputeFileHash(filePath, newHash))
-    {
-        return false;
-    }
-
-    std::string storedHash;
-    ChangeType storedStatus;
-    std::string storedTimestamp;
-    bool hadPreviousRecord =
-        databaseSession.GetFileState(relativeFilePath.string(), storedHash, storedStatus, storedTimestamp) && (ChangeType::Deleted != storedStatus);
-    bool fileChanged = ((!hadPreviousRecord) || (newHash != storedHash));
-
-    ChangeType newStatus;
-    if (!hadPreviousRecord)
-    {
-        newStatus = ChangeType::Added;
-        fs::create_directories(currentFilePath.parent_path(), errorCode);
-        fs::copy_file(filePath, currentFilePath, fs::copy_options::overwrite_existing, errorCode);
-    }
-    else if (fileChanged)
-    {
-        newStatus = ChangeType::Modified;
-        auto snapshotPath = createSnapshotPathOnce();
-        fs::path archivedPath = snapshotPath / relativeFilePath;
-        fs::create_directories(archivedPath.parent_path(), errorCode);
-        fs::copy_file(currentFilePath, archivedPath, fs::copy_options::overwrite_existing, errorCode);
-        fs::copy_file(filePath, currentFilePath, fs::copy_options::overwrite_existing, errorCode);
-    }
-    else
-    {
-        newStatus = ChangeType::Unchanged;
-    }
-
-    std::string timestampValue;
-    if (ChangeType::Unchanged != newStatus)
-    {
-        timestampValue = GetCurrentTimestamp();
-    }
-    else
-    {
-        timestampValue = storedTimestamp;
-    }
-
-    if (!databaseSession.UpdateFileState(relativeFilePath.string(), newHash, newStatus, timestampValue))
-    {
-        return false;
-    }
-
-    if (nullptr != onProgressCallback)
-    {
-        onProgressCallback({"collecting", ++processedCount, 0, filePath});
-    }
-
-    return true;
-}
-
-/**
  * @brief Detect and process files that have been deleted from source.
  *
  * Scans database for tracked files, checks if they still exist in source,
@@ -274,151 +181,179 @@ static bool DetectDeletedFiles(const fs::path& sourceFolderPath, const fs::path&
     return operationSucceeded;
 }
 
-bool RunBackup(const BackupConfig& configuration)
+/** Run backup with multithreaded file processing */
+bool RunBackup(const BackupConfig& config)
 {
-    std::atomic<bool> operationSucceeded{true};
-    std::error_code errorCode;
+    std::atomic<bool> success{true};
+    std::error_code ec;
 
-    const fs::path sourceFilePath = configuration.sourceDir;
-    const fs::path sourceFolderPath = fs::is_regular_file(configuration.sourceDir) ? configuration.sourceDir.parent_path() : configuration.sourceDir;
-
-    if (!fs::exists(sourceFolderPath))
-    {
+    // Determine source root
+    fs::path sourceRoot = fs::is_regular_file(config.sourceDir) ? config.sourceDir.parent_path() : config.sourceDir;
+    if (!fs::exists(sourceRoot))
         return false;
-    }
 
-    const fs::path backupFolderPath = configuration.backupRoot / "backup";
-    const fs::path historyFolderPath = configuration.backupRoot / "deleted";
+    fs::path backupRoot = config.backupRoot / "backup";
+    fs::path historyRoot = config.backupRoot / "deleted";
+    fs::create_directories(backupRoot, ec);
+    fs::create_directories(historyRoot, ec);
 
-    fs::create_directories(backupFolderPath, errorCode);
-    fs::create_directories(historyFolderPath, errorCode);
-
-    std::once_flag snapshotOnceFlag;
+    // Snapshot creation (once)
+    std::once_flag snapshotFlag;
     fs::path snapshotPath;
-
-    // Lazy initialization pattern for snapshot creation
     auto CreateSnapshotOnce = [&]() -> fs::path
     {
-        std::call_once(snapshotOnceFlag, [&]() { snapshotPath = CreateSnapshotDirectory(historyFolderPath); });
+        std::call_once(snapshotFlag, [&]() { snapshotPath = CreateSnapshotDirectory(historyRoot); });
         return snapshotPath;
     };
 
-    // Thread-safe SQLite wrapper
-    SQLiteSession databaseSession(configuration.databaseFile);
-
-    if (!databaseSession.InitializeSchema())
-    {
+    // Initialize database
+    SQLiteSession database(config.databaseFile);
+    if (!database.InitializeSchema())
         return false;
-    }
 
-    // Progress callback thread-safety
+    // Thread-safe progress callback
     std::mutex progressMutex;
-    auto threadSafeProgressCallback = [&](const BackupProgress& progress)
+    auto threadSafeProgress = [&](const BackupProgress& prog)
     {
-        if (!configuration.onProgress)
-        {
+        if (!config.onProgress)
             return;
-        }
         std::lock_guard lock(progressMutex);
-        configuration.onProgress(progress);
+        config.onProgress(prog);
     };
 
+    // Queue for files (bounded)
     std::atomic<std::size_t> processedCount{0};
     std::mutex queueMutex;
-    std::condition_variable queueCondition;
+    std::condition_variable queueCV;
     std::queue<fs::path> fileQueue;
     bool doneWalking = false;
 
-    // Thread pool
-    std::vector<std::thread> workerThreads;
     unsigned int threadCount = std::max(1u, std::thread::hardware_concurrency());
+    const std::size_t maxQueueSize = threadCount * 4; // bounded size
 
-    for (unsigned int threadIndex = 0; threadIndex < threadCount; ++threadIndex)
+    // Helper: process a single file
+    auto ProcessFile = [&](const fs::path& file)
     {
-        workerThreads.emplace_back(
-            [&]()
-            {
-                while (true)
-                {
-                    fs::path currentFile;
-                    {
-                        std::unique_lock lock(queueMutex);
-                        queueCondition.wait(lock, [&]() { return ((!fileQueue.empty()) || (doneWalking)); });
-
-                        if (fileQueue.empty())
-                        {
-                            if (doneWalking)
-                            {
-                                return;
-                            }
-                            continue;
-                        }
-
-                        currentFile = fileQueue.front();
-                        fileQueue.pop();
-                    }
-
-                    // Capture the result and update global flag
-                    bool fileSuccess = ProcessFile(currentFile, sourceFolderPath, backupFolderPath, CreateSnapshotOnce, databaseSession,
-                                                   threadSafeProgressCallback, processedCount);
-                    if (!fileSuccess)
-                    {
-                        operationSucceeded.store(false, std::memory_order_relaxed);
-                    }
-                }
-            });
-    }
-
-    // Enqueue files lazily, streaming directly to threads
-    auto EnqueueFile = [&](const fs::path& file)
-    {
+        fs::path relativePath = fs::relative(file, sourceRoot, ec);
+        if (ec)
         {
-            std::lock_guard lock(queueMutex);
-            fileQueue.push(file);
+            success.store(false);
+            return;
         }
-        queueCondition.notify_one();
+        if (relativePath == ".")
+            relativePath = file.filename();
+
+        fs::path backupFile = backupRoot / relativePath;
+        std::string newHash;
+        if (!ComputeFileHash(file, newHash))
+        {
+            success.store(false);
+            return;
+        }
+
+        std::string storedHash, storedTimestamp;
+        ChangeType storedStatus;
+        bool hasRecord = database.GetFileState(relativePath.string(), storedHash, storedStatus, storedTimestamp) && storedStatus != ChangeType::Deleted;
+
+        bool changed = (!hasRecord) || (newHash != storedHash);
+        ChangeType newStatus = ChangeType::Unchanged;
+        std::string timestampValue = storedTimestamp;
+
+        if (!hasRecord)
+        {
+            newStatus = ChangeType::Added;
+            timestampValue = GetCurrentTimestamp();
+            fs::create_directories(backupFile.parent_path(), ec);
+            fs::copy_file(file, backupFile, fs::copy_options::overwrite_existing, ec);
+        }
+        else if (changed)
+        {
+            newStatus = ChangeType::Modified;
+            timestampValue = GetCurrentTimestamp();
+            fs::path snapshotFile = CreateSnapshotOnce() / relativePath;
+            fs::create_directories(snapshotFile.parent_path(), ec);
+            fs::copy_file(backupFile, snapshotFile, fs::copy_options::overwrite_existing, ec);
+            fs::copy_file(file, backupFile, fs::copy_options::overwrite_existing, ec);
+        }
+
+        if (!database.UpdateFileState(relativePath.string(), newHash, newStatus, timestampValue))
+            success.store(false);
+
+        threadSafeProgress({"collecting", ++processedCount, 0, file});
     };
 
-    // Stream files from directory or single file
-    if (fs::is_directory(sourceFilePath))
+    // Worker thread: consume files from the queue
+    auto WorkerThread = [&]()
     {
-        for (auto& entry : fs::recursive_directory_iterator(sourceFolderPath, errorCode))
+        while (true)
         {
-            if ((!errorCode) && (entry.is_regular_file()))
+            fs::path file;
+            // Lock scope
             {
-                EnqueueFile(entry.path());
+                std::unique_lock lock(queueMutex);
+
+                // Wait until there is work or we are done
+                queueCV.wait(lock, [&]() { return doneWalking || !fileQueue.empty(); });
+
+                if (fileQueue.empty())
+                    return;
+
+                // Dequeue file for processing
+                file = std::move(fileQueue.front());
+                fileQueue.pop();
+
+                // Notify producer in case it was waiting for space in the queue
+                queueCV.notify_all();
             }
+
+            // Process the file outside the lock
+            ProcessFile(file);
+        }
+    };
+
+    // Start worker threads
+    std::vector<std::thread> workers;
+    for (unsigned int i = 0; i < threadCount; ++i)
+        workers.emplace_back(WorkerThread);
+
+    
+    auto EnqueueFile = [&](const fs::path& file)
+    {
+        std::unique_lock lock(queueMutex);
+        queueCV.wait(lock, [&]() { return fileQueue.size() < maxQueueSize; });
+        fileQueue.push(file);
+        queueCV.notify_all(); // notify workers
+    };
+    
+    // Enqueue initial files
+    const fs::path path = config.sourceDir;
+    if (fs::is_regular_file(path))
+    {
+        EnqueueFile(path);
+    }
+    else if (fs::is_directory(path))
+    {
+        for (auto& entry : fs::recursive_directory_iterator(path, ec))
+        {
+            if (!ec && entry.is_regular_file())
+                EnqueueFile(entry.path());
         }
     }
-    else if (fs::is_regular_file(sourceFilePath))
-    {
-        EnqueueFile(sourceFilePath);
-    }
-    else
-    {
-        operationSucceeded.store(false);
-    }
 
-    // Signal threads no more work
+    // Signal done
     {
         std::lock_guard lock(queueMutex);
         doneWalking = true;
     }
-    queueCondition.notify_all();
+    queueCV.notify_all();
 
-    // Wait for threads
-    for (auto& workerThread : workerThreads)
-    {
-        workerThread.join();
-    }
+    // Join threads
+    for (auto& t : workers)
+        t.join();
 
-    if (operationSucceeded.load())
-    {
-        if (!DetectDeletedFiles(sourceFolderPath, backupFolderPath, CreateSnapshotOnce, databaseSession, threadSafeProgressCallback))
-        {
-            operationSucceeded.store(false);
-        }
-    }
+    // Handle deleted files
+    if (success.load())
+        success.store(DetectDeletedFiles(sourceRoot, backupRoot, CreateSnapshotOnce, database, threadSafeProgress));
 
-    return operationSucceeded.load();
+    return success.load();
 }
