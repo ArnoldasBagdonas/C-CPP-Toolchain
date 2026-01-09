@@ -70,22 +70,22 @@ endfunction()
 # ---------------------------------------------------------------------------
 # Test sources
 # ---------------------------------------------------------------------------
-set(UNIT_TEST_SOURCES
+set(BACKUP_TEST_SOURCES
     src/main.cpp
     src/backup_e2e_tests.cpp
-    src/backup_change_type_tests.cpp
+    src/backup_unit_tests.cpp
 )
 
 set(SANITIZER_TEST_SOURCES
     src/main.cpp
-    src/sanitizer_tests.cpp
+    src/sanitizer_validation_tests.cpp
 )
 
 # ---------------------------------------------------------------------------
 # Define test executables
 # ---------------------------------------------------------------------------
-rdemo_add_gtest_executable(unit_tests
-    SOURCES   ${UNIT_TEST_SOURCES}
+rdemo_add_gtest_executable(backup_tests
+    SOURCES   ${BACKUP_TEST_SOURCES}
     LIBRARIES rdemo_backup::BackupUtility sqlite3 xxhash_static
 )
 
@@ -96,7 +96,7 @@ rdemo_add_gtest_executable(sanitizer_tests
 # ---------------------------------------------------------------------------
 # Register tests
 # ---------------------------------------------------------------------------
-rdemo_register_gtests(unit_tests)
+rdemo_register_gtests(backup_tests)
 rdemo_register_gtests(sanitizer_tests)
 
 # ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@ if(PROJECT_BUILD_VARIANT STREQUAL "VALGRIND")
     endfunction()
 
     # Create Valgrind targets for both test executables
-    add_valgrind_test(unit_tests)
+    add_valgrind_test(backup_tests)
     if(TARGET sanitizer_tests)
       add_valgrind_test(sanitizer_tests)
     endif()

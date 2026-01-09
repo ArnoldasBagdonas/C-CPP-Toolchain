@@ -1,3 +1,7 @@
+/**
+ * @file backup_e2e_tests.cpp
+ * @brief End-to-end tests for the backup utility.
+ */
 #include "BackupUtility/BackupUtility.hpp"
 #include "helpers/TestHelpers.hpp"
 
@@ -13,7 +17,7 @@
 
 namespace fs = std::filesystem;
 
-class E2ERunBackupTest : public ::testing::Test
+class RunE2ETests : public ::testing::Test
 {
   protected:
     fs::path sourceDir;
@@ -64,7 +68,7 @@ class E2ERunBackupTest : public ::testing::Test
 /* ERROR HANDLING */
 /* ============================================================================ */
 
-TEST_F(E2ERunBackupTest, RunBackup_WithNonExistentSource_ReturnsFalse)
+TEST_F(RunE2ETests, RunBackup_WithNonExistentSource_ReturnsFalse)
 {
     // Arrange
     BackupConfig configuration;
@@ -93,7 +97,7 @@ TEST_F(E2ERunBackupTest, RunBackup_WithNonExistentSource_ReturnsFalse)
     }
 }
 
-TEST_F(E2ERunBackupTest, RunBackup_WithEmptySource_CreatesEmptyBackup)
+TEST_F(RunE2ETests, RunBackup_WithEmptySource_CreatesEmptyBackup)
 {
     // Arrange
     BackupConfig configuration;
@@ -131,7 +135,7 @@ TEST_F(E2ERunBackupTest, RunBackup_WithEmptySource_CreatesEmptyBackup)
 /* INITIAL BACKUP */
 /* ============================================================================ */
 
-TEST_F(E2ERunBackupTest, RunBackup_InitialBackup_CopiesAllFiles)
+TEST_F(RunE2ETests, RunBackup_InitialBackup_CopiesAllFiles)
 {
     // Arrange
     CreateFile(sourceDir / "file1.txt", "content1");
@@ -177,7 +181,7 @@ TEST_F(E2ERunBackupTest, RunBackup_InitialBackup_CopiesAllFiles)
 /* INCREMENTAL BACKUPS */
 /* ============================================================================ */
 
-TEST_F(E2ERunBackupTest, RunBackup_IncrementalBackup_TracksChanges)
+TEST_F(RunE2ETests, RunBackup_IncrementalBackup_TracksChanges)
 {
     // Arrange
     CreateFile(sourceDir / "file1.txt", "content1");
@@ -235,7 +239,7 @@ TEST_F(E2ERunBackupTest, RunBackup_IncrementalBackup_TracksChanges)
 /* UNCHANGED FILES */
 /* ============================================================================ */
 
-TEST_F(E2ERunBackupTest, RunBackup_UnchangedFile_IsNotModified)
+TEST_F(RunE2ETests, RunBackup_UnchangedFile_IsNotModified)
 {
     // Arrange
     CreateFile(sourceDir / "test.txt", "initial content");
@@ -275,7 +279,7 @@ TEST_F(E2ERunBackupTest, RunBackup_UnchangedFile_IsNotModified)
 /* SINGLE FILE SOURCE */
 /* ============================================================================ */
 
-TEST_F(E2ERunBackupTest, RunBackup_SingleFileSource_CreatesBackupFile)
+TEST_F(RunE2ETests, RunBackup_SingleFileSource_CreatesBackupFile)
 {
     // Arrange
     fs::path sourceFilePath = sourceDir / "single.txt";
@@ -306,7 +310,7 @@ TEST_F(E2ERunBackupTest, RunBackup_SingleFileSource_CreatesBackupFile)
 /* REPEATED DELETIONS */
 /* ============================================================================ */
 
-TEST_F(E2ERunBackupTest, RunBackup_AlreadyDeletedFile_IsNotArchivedAgain)
+TEST_F(RunE2ETests, RunBackup_AlreadyDeletedFile_IsNotArchivedAgain)
 {
     // Arrange
     fs::path sourceFilePath = sourceDir / "file.txt";
