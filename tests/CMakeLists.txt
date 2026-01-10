@@ -70,7 +70,7 @@ set(SANITIZER_TEST_SOURCES
 # ---------------------------------------------------------------------------
 # Define test executables
 # ---------------------------------------------------------------------------
-rdemo_add_gtest_executable(backup_tests
+rdemo_add_gtest_executable(unit_tests
     SOURCES   ${BACKUP_TEST_SOURCES}
     LIBRARIES rdemo_backup::BackupUtility sqlite3 xxhash_static
 )
@@ -82,8 +82,10 @@ rdemo_add_gtest_executable(sanitizer_tests
 # ---------------------------------------------------------------------------
 # Register tests
 # ---------------------------------------------------------------------------
-rdemo_register_gtests(backup_tests)
-rdemo_register_gtests(sanitizer_tests)
+rdemo_register_gtests(unit_tests)
+if(NOT PROJECT_BUILD_VARIANT STREQUAL "COVERAGE")
+    rdemo_register_gtests(sanitizer_tests)
+endif()
 
 # ---------------------------------------------------------------------------
 # Valgrind integration (Linux)
@@ -121,7 +123,7 @@ if(PROJECT_BUILD_VARIANT STREQUAL "VALGRIND")
     endfunction()
 
     # Create Valgrind targets for both test executables
-    add_valgrind_test(backup_tests)
+    add_valgrind_test(unit_tests)
     if(TARGET sanitizer_tests)
       add_valgrind_test(sanitizer_tests)
     endif()
