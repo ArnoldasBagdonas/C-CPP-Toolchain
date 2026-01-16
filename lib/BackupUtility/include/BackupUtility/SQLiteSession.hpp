@@ -193,17 +193,17 @@ class SQLiteSession
             return false;
         }
 
-        std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter> statement;
-
+        sqlite3_stmt* stmtRaw = nullptr;
         if (SQLITE_OK != sqlite3_prepare_v2(database,
                                             "INSERT INTO files(path, hash, status, last_updated) "
                                             "VALUES(?1, ?2, ?3, ?4) "
                                             "ON CONFLICT(path) DO UPDATE SET "
                                             "hash=excluded.hash, status=excluded.status, last_updated=excluded.last_updated;",
-                                            -1, statement.get(), nullptr))
+                                            -1, &stmtRaw, nullptr))
         {
             return false;
         }
+        std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter> statement(stmtRaw);
 
         sqlite3_bind_text(statement.get(), 1, filePath.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(statement.get(), 2, fileHash.c_str(), -1, SQLITE_TRANSIENT);
@@ -231,11 +231,12 @@ class SQLiteSession
             return false;
         }
 
-        std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter> statement;
-        if (SQLITE_OK != sqlite3_prepare_v2(database, "SELECT hash, status, last_updated FROM files WHERE path=?1;", -1, statement.get(), nullptr))
+        sqlite3_stmt* stmtRaw = nullptr;
+        if (SQLITE_OK != sqlite3_prepare_v2(database, "SELECT hash, status, last_updated FROM files WHERE path=?1;", -1, &stmtRaw, nullptr))
         {
             return false;
         }
+        std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter> statement(stmtRaw);
 
         sqlite3_bind_text(statement.get(), 1, filePath.c_str(), -1, SQLITE_TRANSIENT);
 
@@ -295,11 +296,12 @@ class SQLiteSession
             return false;
         }
 
-        std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter> statement;
-        if (SQLITE_OK != sqlite3_prepare_v2(database, "UPDATE files SET status=?1, last_updated=?2 WHERE path=?3;", -1, statement.get(), nullptr))
+        sqlite3_stmt* stmtRaw = nullptr;
+        if (SQLITE_OK != sqlite3_prepare_v2(database, "UPDATE files SET status=?1, last_updated=?2 WHERE path=?3;", -1, &stmtRaw, nullptr))
         {
             return false;
         }
+        std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter> statement(stmtRaw);
 
         sqlite3_bind_text(statement.get(), 1, ChangeTypeToString(ChangeType::Deleted), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(statement.get(), 2, timestamp.c_str(), -1, SQLITE_TRANSIENT);

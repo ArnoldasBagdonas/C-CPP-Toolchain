@@ -52,7 +52,7 @@ bool ComputeFileHash(const fs::path& filePath, std::string& outputHash)
     XXH64_reset(hashState, 0);
 
     char buffer[FILE_READ_BUFFER_SIZE];
-    while (true == inputStream.read(buffer, sizeof(buffer))) // Explicit comparison
+    while (inputStream.read(buffer, sizeof(buffer)))
     {
         XXH64_update(hashState, buffer, sizeof(buffer));
     }
@@ -236,7 +236,7 @@ class FileProcessor
     {
         std::error_code ec;
         fs::path relativePath = fs::relative(file, _sourceRoot, ec);
-        if (true == ec.value()) // Explicit comparison
+        if (ec)
         {
             _success.store(false);
             return;
@@ -334,7 +334,7 @@ bool RunBackup(const BackupConfig& config)
 
     // Determine source root
     fs::path sourceRoot = fs::is_regular_file(config.sourceDir, ec) ? config.sourceDir.parent_path() : config.sourceDir;
-    if (true == ec.value() || false == fs::exists(sourceRoot)) // Explicit comparison
+    if (ec || !fs::exists(sourceRoot))
         return false;
 
     fs::path backupRoot = config.backupRoot / "backup";
@@ -421,7 +421,7 @@ bool RunBackup(const BackupConfig& config)
     {
         for (auto& entry : fs::recursive_directory_iterator(path, ec))
         {
-            if (false == ec.value() && true == entry.is_regular_file(ec)) // Explicit comparison
+            if (!ec && entry.is_regular_file(ec))
                 EnqueueFile(entry.path());
         }
     }
