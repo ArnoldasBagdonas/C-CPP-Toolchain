@@ -3,6 +3,7 @@
 #pragma once
 
 #include <filesystem>
+#include <memory> // Required for std::unique_ptr
 #include <mutex>
 #include <sqlite3.h>
 #include <stdexcept>
@@ -18,6 +19,36 @@ const char* ChangeTypeToString(ChangeType changeType);
 ChangeType StringToChangeType(const std::string& stringValue);
 
 /**
+ * @brief Custom deleter for sqlite3 database connections.
+ * Ensures sqlite3_close is called when a unique_ptr goes out of scope.
+ */
+struct SQLiteDBDeleter
+{
+    void operator()(sqlite3* db) const
+    {
+        if (nullptr != db)
+        {
+            sqlite3_close(db);
+        }
+    }
+};
+
+/**
+ * @brief Custom deleter for sqlite3_stmt prepared statements.
+ * Ensures sqlite3_finalize is called when a unique_ptr goes out of scope.
+ */
+struct SQLiteStmtDeleter
+{
+    void operator()(sqlite3_stmt* stmt) const
+    {
+        if (nullptr != stmt)
+        {
+            sqlite3_finalize(stmt);
+        }
+    }
+};
+
+/**
  * @brief Thread-safe SQLite wrapper that provides a per-thread connection.
  *
  * Each thread gets its own connection automatically.
@@ -26,12 +57,14 @@ ChangeType StringToChangeType(const std::string& stringValue);
 class SQLiteSession
 {
   public:
+    static constexpr int SQLITE_BUSY_TIMEOUT_MS = 5000;
+
     /**
      * @brief Construct a SQLite session for the specified database file.
      *
      * @param[in] databasePath Path to the SQLite database file
      */
-    explicit SQLiteSession(const fs::path& databasePath) : m_databasePath(databasePath)
+    explicit SQLiteSession(const fs::path& databasePath) : _databasePath(databasePath)
     {
         // Enable serialized mode for SQLite (thread-safe)
         sqlite3_config(SQLITE_CONFIG_SERIALIZED);
@@ -40,19 +73,7 @@ class SQLiteSession
     /**
      * @brief Destructor cleans up all thread connections.
      */
-    ~SQLiteSession()
-    {
-        // Clean up all thread connections
-        std::lock_guard<std::mutex> lock(m_connectionsMutex);
-        for (auto& connectionPair : m_connections)
-        {
-            if (nullptr != connectionPair.second)
-            {
-                sqlite3_close(connectionPair.second);
-            }
-        }
-        m_connections.clear();
-    }
+    ~SQLiteSession() = default; // unique_ptr will handle closing connections
 
     /**
      * @brief Get a SQLite connection for this thread.
@@ -61,28 +82,27 @@ class SQLiteSession
      *
      * @return sqlite3* pointer to the connection
      */
-    sqlite3* get()
+    std::unique_ptr<sqlite3, SQLiteDBDeleter>& get()
     {
         std::thread::id threadId = std::this_thread::get_id();
 
         {
-            std::lock_guard<std::mutex> lock(m_connectionsMutex);
-            auto iterator = m_connections.find(threadId);
-            if ((m_connections.end() != iterator) && (nullptr != iterator->second))
+            std::lock_guard<std::mutex> lock(_connectionsMutex);
+            auto iterator = _connections.find(threadId);
+            if ((_connections.end() != iterator) && (nullptr != iterator->second))
             {
                 return iterator->second;
             }
         }
 
         // Open a new connection for this thread
-        sqlite3* database = OpenConnection();
+        std::unique_ptr<sqlite3, SQLiteDBDeleter> database = OpenConnection();
 
         {
-            std::lock_guard<std::mutex> lock(m_connectionsMutex);
-            m_connections[threadId] = database;
+            std::lock_guard<std::mutex> lock(_connectionsMutex);
+            _connections[threadId] = std::move(database);
+            return _connections[threadId];
         }
-
-        return database;
     }
 
     /**
@@ -94,7 +114,8 @@ class SQLiteSession
     void Execute(const std::string& sqlStatement)
     {
         char* errorMessage = nullptr;
-        if (SQLITE_OK != sqlite3_exec(get(), sqlStatement.c_str(), nullptr, nullptr, &errorMessage))
+        sqlite3* db = get().get();
+        if (SQLITE_OK != sqlite3_exec(db, sqlStatement.c_str(), nullptr, nullptr, &errorMessage))
         {
             std::string error = (nullptr != errorMessage) ? errorMessage : "Unknown SQLite error";
             sqlite3_free(errorMessage);
@@ -109,14 +130,15 @@ class SQLiteSession
      * @return sqlite3_stmt* prepared statement
      * @throws std::runtime_error on error
      */
-    sqlite3_stmt* Prepare(const std::string& sqlStatement)
+    std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter> Prepare(const std::string& sqlStatement)
     {
         sqlite3_stmt* statement = nullptr;
-        if (SQLITE_OK != sqlite3_prepare_v2(get(), sqlStatement.c_str(), -1, &statement, nullptr))
+        sqlite3* db = get().get();
+        if (SQLITE_OK != sqlite3_prepare_v2(db, sqlStatement.c_str(), -1, &statement, nullptr))
         {
-            throw std::runtime_error(sqlite3_errmsg(get()));
+            throw std::runtime_error(sqlite3_errmsg(db));
         }
-        return statement;
+        return std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter>(statement);
     }
 
     /**
@@ -129,19 +151,27 @@ class SQLiteSession
      */
     bool InitializeSchema()
     {
-        sqlite3* database = get();
-        if (nullptr == database)
+        try
         {
+            sqlite3* database = get().get();
+            if (nullptr == database)
+            {
+                return false;
+            }
+
+            static const char* SQL_CREATE_TABLE = "CREATE TABLE IF NOT EXISTS files ("
+                                                  "path TEXT PRIMARY KEY,"
+                                                  "hash TEXT NOT NULL,"
+                                                  "last_updated TEXT NOT NULL,"
+                                                  "status TEXT NOT NULL);";
+
+            return (SQLITE_OK == sqlite3_exec(database, SQL_CREATE_TABLE, nullptr, nullptr, nullptr));
+        }
+        catch (const std::runtime_error& e)
+        {
+            // TODO: Log error e.what()
             return false;
         }
-
-        static const char* SQL_CREATE_TABLE = "CREATE TABLE IF NOT EXISTS files ("
-                                              "path TEXT PRIMARY KEY,"
-                                              "hash TEXT NOT NULL,"
-                                              "last_updated TEXT NOT NULL,"
-                                              "status TEXT NOT NULL);";
-
-        return (SQLITE_OK == sqlite3_exec(database, SQL_CREATE_TABLE, nullptr, nullptr, nullptr));
     }
 
     /**
@@ -157,31 +187,30 @@ class SQLiteSession
      */
     bool UpdateFileState(const std::string& filePath, const std::string& fileHash, ChangeType changeStatus, const std::string& timestamp)
     {
-        sqlite3* database = get();
+        sqlite3* database = get().get();
         if (nullptr == database)
         {
             return false;
         }
 
-        sqlite3_stmt* statement = nullptr;
+        std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter> statement;
 
         if (SQLITE_OK != sqlite3_prepare_v2(database,
                                             "INSERT INTO files(path, hash, status, last_updated) "
                                             "VALUES(?1, ?2, ?3, ?4) "
                                             "ON CONFLICT(path) DO UPDATE SET "
                                             "hash=excluded.hash, status=excluded.status, last_updated=excluded.last_updated;",
-                                            -1, &statement, nullptr))
+                                            -1, statement.get(), nullptr))
         {
             return false;
         }
 
-        sqlite3_bind_text(statement, 1, filePath.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(statement, 2, fileHash.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(statement, 3, ChangeTypeToString(changeStatus), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(statement, 4, timestamp.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement.get(), 1, filePath.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement.get(), 2, fileHash.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement.get(), 3, ChangeTypeToString(changeStatus), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement.get(), 4, timestamp.c_str(), -1, SQLITE_TRANSIENT);
 
-        bool operationSucceeded = (SQLITE_DONE == sqlite3_step(statement));
-        sqlite3_finalize(statement);
+        bool operationSucceeded = (SQLITE_DONE == sqlite3_step(statement.get()));
         return operationSucceeded;
     }
 
@@ -196,26 +225,26 @@ class SQLiteSession
      */
     bool GetFileState(const std::string& filePath, std::string& outputHash, ChangeType& outputStatus, std::string& outputTimestamp)
     {
-        sqlite3* database = get();
+        sqlite3* database = get().get();
         if (nullptr == database)
         {
             return false;
         }
 
-        sqlite3_stmt* statement = nullptr;
-        if (SQLITE_OK != sqlite3_prepare_v2(database, "SELECT hash, status, last_updated FROM files WHERE path=?1;", -1, &statement, nullptr))
+        std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter> statement;
+        if (SQLITE_OK != sqlite3_prepare_v2(database, "SELECT hash, status, last_updated FROM files WHERE path=?1;", -1, statement.get(), nullptr))
         {
             return false;
         }
 
-        sqlite3_bind_text(statement, 1, filePath.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement.get(), 1, filePath.c_str(), -1, SQLITE_TRANSIENT);
 
         bool recordFound = false;
-        if (SQLITE_ROW == sqlite3_step(statement))
+        if (SQLITE_ROW == sqlite3_step(statement.get()))
         {
-            const char* hashText = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
-            const char* statusText = reinterpret_cast<const char*>(sqlite3_column_text(statement, 1));
-            const char* timestampText = reinterpret_cast<const char*>(sqlite3_column_text(statement, 2));
+            const char* hashText = reinterpret_cast<const char*>(sqlite3_column_text(statement.get(), 0));
+            const char* statusText = reinterpret_cast<const char*>(sqlite3_column_text(statement.get(), 1));
+            const char* timestampText = reinterpret_cast<const char*>(sqlite3_column_text(statement.get(), 2));
 
             if ((nullptr != hashText) && (nullptr != statusText) && (nullptr != timestampText))
             {
@@ -226,25 +255,29 @@ class SQLiteSession
             }
         }
 
-        sqlite3_finalize(statement);
         return recordFound;
     }
 
     /**
      * @brief Get all files from the database.
      *
-     * @param[out] statement Pointer to receive the prepared statement
-     * @return true if query prepared successfully, false otherwise
+     * @return std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter> a prepared statement
+     * @throws std::runtime_error if query preparation fails
      */
-    bool GetAllFiles(sqlite3_stmt** statement)
+    std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter> GetAllFiles()
     {
-        sqlite3* database = get();
-        if ((nullptr == database) || (nullptr == statement))
+        sqlite3* database = get().get();
+        if (nullptr == database)
         {
-            return false;
+            throw std::runtime_error("Database connection is null.");
         }
 
-        return (SQLITE_OK == sqlite3_prepare_v2(database, "SELECT path, status FROM files;", -1, statement, nullptr));
+        sqlite3_stmt* stmtRaw = nullptr;
+        if (SQLITE_OK != sqlite3_prepare_v2(database, "SELECT path, status FROM files;", -1, &stmtRaw, nullptr))
+        {
+            throw std::runtime_error(sqlite3_errmsg(database));
+        }
+        return std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter>(stmtRaw);
     }
 
     /**
@@ -256,24 +289,23 @@ class SQLiteSession
      */
     bool MarkFileAsDeleted(const std::string& filePath, const std::string& timestamp)
     {
-        sqlite3* database = get();
+        sqlite3* database = get().get();
         if (nullptr == database)
         {
             return false;
         }
 
-        sqlite3_stmt* statement = nullptr;
-        if (SQLITE_OK != sqlite3_prepare_v2(database, "UPDATE files SET status=?1, last_updated=?2 WHERE path=?3;", -1, &statement, nullptr))
+        std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter> statement;
+        if (SQLITE_OK != sqlite3_prepare_v2(database, "UPDATE files SET status=?1, last_updated=?2 WHERE path=?3;", -1, statement.get(), nullptr))
         {
             return false;
         }
 
-        sqlite3_bind_text(statement, 1, ChangeTypeToString(ChangeType::Deleted), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(statement, 2, timestamp.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(statement, 3, filePath.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement.get(), 1, ChangeTypeToString(ChangeType::Deleted), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement.get(), 2, timestamp.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement.get(), 3, filePath.c_str(), -1, SQLITE_TRANSIENT);
 
-        bool operationSucceeded = (SQLITE_DONE == sqlite3_step(statement));
-        sqlite3_finalize(statement);
+        bool operationSucceeded = (SQLITE_DONE == sqlite3_step(statement.get()));
         return operationSucceeded;
     }
 
@@ -284,31 +316,31 @@ class SQLiteSession
      * @return sqlite3* pointer to the opened database connection
      * @throws std::runtime_error if connection fails
      */
-    sqlite3* OpenConnection()
+    std::unique_ptr<sqlite3, SQLiteDBDeleter> OpenConnection()
     {
-        sqlite3* database = nullptr;
-        if (SQLITE_OK != sqlite3_open(m_databasePath.string().c_str(), &database))
+        sqlite3* databaseRaw = nullptr;
+        if (SQLITE_OK != sqlite3_open(_databasePath.string().c_str(), &databaseRaw))
         {
-            throw std::runtime_error("Failed to open SQLite DB: " + m_databasePath.string());
+            throw std::runtime_error("Failed to open SQLite DB: " + _databasePath.string());
         }
+        std::unique_ptr<sqlite3, SQLiteDBDeleter> database(databaseRaw);
 
         // Set busy timeout to handle concurrent access
-        sqlite3_busy_timeout(database, 5000);
+        sqlite3_busy_timeout(database.get(), SQLITE_BUSY_TIMEOUT_MS);
 
         // Enable WAL mode on this connection
         char* errorMessage = nullptr;
-        if (SQLITE_OK != sqlite3_exec(database, "PRAGMA journal_mode=WAL;", nullptr, nullptr, &errorMessage))
+        if (SQLITE_OK != sqlite3_exec(database.get(), "PRAGMA journal_mode=WAL;", nullptr, nullptr, &errorMessage))
         {
             std::string error = (nullptr != errorMessage) ? errorMessage : "Unknown SQLite error enabling WAL";
             sqlite3_free(errorMessage);
-            sqlite3_close(database);
             throw std::runtime_error(error);
         }
 
         return database;
     }
 
-    fs::path m_databasePath;
-    std::mutex m_connectionsMutex;
-    std::unordered_map<std::thread::id, sqlite3*> m_connections;
+    fs::path _databasePath;
+    std::mutex _connectionsMutex;
+    std::unordered_map<std::thread::id, std::unique_ptr<sqlite3, SQLiteDBDeleter>> _connections;
 };

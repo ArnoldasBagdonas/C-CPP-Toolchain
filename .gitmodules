@@ -1,0 +1,3 @@
+[submodule "third_party/copilot-instructions"]
+	path = third_party/copilot-instructions
+	url = https://github.com/ArnoldasBagdonas/copilot-instructions.git
