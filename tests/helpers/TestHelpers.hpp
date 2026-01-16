@@ -28,49 +28,46 @@ inline std::vector<std::string> NormalizePaths(const std::vector<std::string>& p
     return normalizedPaths;
 }
 
+
+enum class DirectoryListingMode
+{
+    Recursive,
+    NonRecursive
+};
+
 /**
- * @brief Get directory contents recursively as a sorted vector of strings.
+ * @brief Get directory contents as a sorted vector of strings.
  *
- * Recursively traverses the specified directory and returns all file and
- * subdirectory paths relative to the directory root. Paths are normalized
- * and sorted for consistent test assertions.
+ * Traverses the specified directory and returns all file and subdirectory
+ * paths. Paths are normalized and sorted for consistent test assertions.
  *
  * @param[in] directoryPath Path to the directory to traverse
- * @return Sorted vector of normalized relative paths
+ * @param[in] mode Specifies the traversal mode (Recursive or NonRecursive).
+ * @return Sorted vector of normalized paths (relative if recursive, filenames
+ * if not)
  */
-inline std::vector<std::string> GetDirectoryContents(const fs::path& directoryPath)
+inline std::vector<std::string> GetDirectoryEntries(
+    const fs::path& directoryPath,
+    DirectoryListingMode mode = DirectoryListingMode::NonRecursive)
 {
     std::vector<std::string> contents;
     if ((fs::exists(directoryPath)) && (fs::is_directory(directoryPath)))
     {
-        for (const auto& entry : fs::recursive_directory_iterator(directoryPath))
+        if (mode == DirectoryListingMode::Recursive)
         {
-            contents.push_back(fs::relative(entry.path(), directoryPath).string());
+            for (const auto& entry : fs::recursive_directory_iterator(directoryPath))
+            {
+                contents.push_back(fs::relative(entry.path(), directoryPath).string());
+            }
+        }
+        else
+        {
+            for (const auto& entry : fs::directory_iterator(directoryPath))
+            {
+                contents.push_back(entry.path().filename().string());
+            }
         }
     }
     std::sort(contents.begin(), contents.end());
     return NormalizePaths(contents);
-}
-
-/**
- * @brief Get directory contents non-recursively as a sorted vector of strings.
- *
- * Lists only the immediate children of the specified directory without
- * traversing subdirectories. Results are sorted for consistent test assertions.
- *
- * @param[in] directoryPath Path to the directory to list
- * @return Sorted vector of filenames and subdirectory names
- */
-inline std::vector<std::string> ListDirectory(const fs::path& directoryPath)
-{
-    std::vector<std::string> contents;
-    if ((fs::exists(directoryPath)) && (fs::is_directory(directoryPath)))
-    {
-        for (const auto& entry : fs::directory_iterator(directoryPath))
-        {
-            contents.push_back(entry.path().filename().string());
-        }
-    }
-    std::sort(contents.begin(), contents.end());
-    return contents;
 }

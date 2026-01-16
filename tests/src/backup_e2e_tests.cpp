@@ -85,14 +85,14 @@ TEST_F(RunE2ETests, RunBackup_WithNonExistentSource_ReturnsFalse)
     fs::path liveBackupDir = backupRoot / "backup";
     if (fs::exists(liveBackupDir))
     {
-        auto liveContents = GetDirectoryContents(liveBackupDir);
+        auto liveContents = GetDirectoryEntries(liveBackupDir, DirectoryListingMode::Recursive);
         ASSERT_THAT(liveContents, testing::IsEmpty()) << "Live backup directory should be empty for failed backup";
     }
 
     fs::path deletedDir = backupRoot / "deleted";
     if (fs::exists(deletedDir))
     {
-        auto deletedContents = GetDirectoryContents(deletedDir);
+        auto deletedContents = GetDirectoryEntries(deletedDir, DirectoryListingMode::Recursive);
         ASSERT_THAT(deletedContents, testing::IsEmpty()) << "Deleted directory should be empty for failed backup";
     }
 }
@@ -115,7 +115,7 @@ TEST_F(RunE2ETests, RunBackup_WithEmptySource_CreatesEmptyBackup)
     bool liveBackupExists = fs::exists(liveBackupDir);
     ASSERT_TRUE(liveBackupExists);
     {
-        auto liveContents = GetDirectoryContents(liveBackupDir);
+        auto liveContents = GetDirectoryEntries(liveBackupDir, DirectoryListingMode::Recursive);
         ASSERT_THAT(liveContents, testing::IsEmpty()) << "Live backup directory should be empty for empty source";
     }
 
@@ -123,7 +123,7 @@ TEST_F(RunE2ETests, RunBackup_WithEmptySource_CreatesEmptyBackup)
     bool deletedDirExists = fs::exists(deletedDir);
     ASSERT_TRUE(deletedDirExists);
     {
-        auto deletedContents = GetDirectoryContents(deletedDir);
+        auto deletedContents = GetDirectoryEntries(deletedDir, DirectoryListingMode::Recursive);
         ASSERT_THAT(deletedContents, testing::IsEmpty()) << "Deleted directory should be empty for initial backup";
     }
 
@@ -157,7 +157,7 @@ TEST_F(RunE2ETests, RunBackup_InitialBackup_CopiesAllFiles)
     ASSERT_TRUE(liveBackupExists);
 
     {
-        auto liveContents = GetDirectoryContents(liveBackupDir);
+        auto liveContents = GetDirectoryEntries(liveBackupDir, DirectoryListingMode::Recursive);
         ASSERT_THAT(liveContents, testing::UnorderedElementsAreArray({"file1.txt", "subdir", "subdir/file2.txt"}))
             << "Backup directory should contain all expected files and subdirectories";
 
@@ -172,7 +172,7 @@ TEST_F(RunE2ETests, RunBackup_InitialBackup_CopiesAllFiles)
     bool deletedDirExists = fs::exists(deletedDir);
     ASSERT_TRUE(deletedDirExists);
     {
-        auto deletedContents = GetDirectoryContents(deletedDir);
+        auto deletedContents = GetDirectoryEntries(deletedDir, DirectoryListingMode::Recursive);
         ASSERT_THAT(deletedContents, testing::IsEmpty()) << "Deleted directory should be empty for initial backup";
     }
 }
@@ -207,7 +207,7 @@ TEST_F(RunE2ETests, RunBackup_IncrementalBackup_TracksChanges)
 
     fs::path liveBackupDir = backupRoot / "backup";
     {
-        auto liveContents = GetDirectoryContents(liveBackupDir);
+        auto liveContents = GetDirectoryEntries(liveBackupDir, DirectoryListingMode::Recursive);
         ASSERT_THAT(liveContents, testing::UnorderedElementsAreArray({"file1.txt", "file3.txt"})) << "Live backup should contain current files only";
 
         std::string file1Content = ReadFile(liveBackupDir / "file1.txt");
@@ -218,12 +218,12 @@ TEST_F(RunE2ETests, RunBackup_IncrementalBackup_TracksChanges)
     }
 
     fs::path deletedDir = backupRoot / "deleted";
-    auto snapshotDirectories = ListDirectory(deletedDir);
+    auto snapshotDirectories = GetDirectoryEntries(deletedDir, DirectoryListingMode::NonRecursive);
     ASSERT_THAT(snapshotDirectories, testing::SizeIs(1)) << "Deleted directory should contain one snapshot";
 
     fs::path snapshotDir = deletedDir / snapshotDirectories[0];
     {
-        auto snapshotContents = GetDirectoryContents(snapshotDir);
+        auto snapshotContents = GetDirectoryEntries(snapshotDir, DirectoryListingMode::Recursive);
         ASSERT_THAT(snapshotContents, testing::UnorderedElementsAreArray({"file1.txt", "file2.txt"}))
             << "Snapshot should contain previous versions of modified and deleted files";
 
@@ -270,7 +270,7 @@ TEST_F(RunE2ETests, RunBackup_UnchangedFile_IsNotModified)
 
     fs::path deletedDir = backupRoot / "deleted";
     {
-        auto deletedContents = GetDirectoryContents(deletedDir);
+        auto deletedContents = GetDirectoryEntries(deletedDir, DirectoryListingMode::Recursive);
         ASSERT_THAT(deletedContents, testing::IsEmpty()) << "Deleted directory should be empty when no files were deleted";
     }
 }
@@ -298,7 +298,7 @@ TEST_F(RunE2ETests, RunBackup_SingleFileSource_CreatesBackupFile)
 
     fs::path backupFile = backupRoot / "backup" / "single.txt";
     {
-        auto backupContents = GetDirectoryContents(backupRoot / "backup");
+        auto backupContents = GetDirectoryEntries(backupRoot / "backup", DirectoryListingMode::Recursive);
         ASSERT_THAT(backupContents, testing::UnorderedElementsAreArray({"single.txt"})) << "Backup directory should contain the single file";
 
         std::string fileContent = ReadFile(backupFile);
@@ -335,14 +335,14 @@ TEST_F(RunE2ETests, RunBackup_AlreadyDeletedFile_IsNotArchivedAgain)
     ASSERT_TRUE(secondDeletionBackupResult);
 
     fs::path deletedDir = backupRoot / "deleted";
-    auto snapshotDirectories = ListDirectory(deletedDir);
+    auto snapshotDirectories = GetDirectoryEntries(deletedDir, DirectoryListingMode::NonRecursive);
     ASSERT_THAT(snapshotDirectories, testing::SizeIs(1)) << "Only one snapshot should exist for a single deletion event";
 
     fs::path snapshotDir = deletedDir / snapshotDirectories[0];
     bool snapshotIsDirectory = fs::is_directory(snapshotDir);
     ASSERT_TRUE(snapshotIsDirectory);
     {
-        auto snapshotContents = GetDirectoryContents(snapshotDir);
+        auto snapshotContents = GetDirectoryEntries(snapshotDir, DirectoryListingMode::Recursive);
         ASSERT_THAT(snapshotContents, testing::UnorderedElementsAreArray({"file.txt"})) << "Snapshot should contain the deleted file";
     }
 
@@ -350,7 +350,7 @@ TEST_F(RunE2ETests, RunBackup_AlreadyDeletedFile_IsNotArchivedAgain)
     bool liveBackupExists = fs::exists(liveBackupDir);
     ASSERT_TRUE(liveBackupExists);
     {
-        auto liveContents = GetDirectoryContents(liveBackupDir);
+        auto liveContents = GetDirectoryEntries(liveBackupDir, DirectoryListingMode::Recursive);
         ASSERT_THAT(liveContents, testing::IsEmpty()) << "Live backup directory should be empty after file deletion";
     }
 }
