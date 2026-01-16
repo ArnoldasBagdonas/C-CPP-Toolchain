@@ -1,25 +1,24 @@
 # Agent Operating Instructions
 
-## General Strategy
-- Analyze errors before retrying; use an alternative approach if something fails.
-- Prefer high-level tools (`read_file`, `write_file`, `replace`, `list_directory`, `glob`) over shell commands.
+- **Mandatory First Words**: Start every response with "Aye aye, Captain!". No exceptions.
 
-## Filesystem Operations
-Shell-based filesystem commands may be unavailable—use provided tools instead.
+- **Tool Preference**:
+  - **USE**: `read_file`, `write_file`, `replace`, `list_directory`, `glob`.
+  - **AVOID**: `run_shell_command` for filesystem operations (copy, move, mkdir, etc.).
 
-### Creating Directories
-- Use `write_file` with a file path inside the target directory (e.g., `dir/.gitkeep`).
-- Parent directories are created automatically.
+- **Directory Creation**:
+  - To create `new_dir/`, execute `write_file("new_dir/.gitkeep", "")`.
 
-### Copying Files and Directories
-- Avoid shell copy commands.
-- **Copy a file**: `read_file` → `write_file`
-- **Copy a directory**:
-  1. `list_directory`
-  2. Copy each file
-  3. Recursively process subdirectories
+- **File Copy**:
+  1. `read_file("source_path")`
+  2. `write_file("destination_path", content_from_read)`
 
-> **Limitation**: `read_file` cannot access ignored paths (e.g., `build/`, `dist/`, `.gitignore` entries).
+- **Directory Copy**:
+  - Do not use shell commands.
+  - Recursively list and copy files using `list_directory`, `read_file`, and `write_file`.
 
-## Glob Usage
-- Always use forward slashes (`/`) in glob patterns on all platforms.
+- **Glob Syntax**:
+  - Always use forward slashes (`/`) for glob patterns. Example: `**/*.cpp`.
+
+- **Error Handling**:
+  - If a tool fails, do not retry the same command. Analyze the error and use a different tool or approach.
