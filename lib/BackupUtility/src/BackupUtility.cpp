@@ -1,5 +1,6 @@
 // file BackupUtility.cpp
 #include "BackupUtility/BackupUtility.hpp"
+#include "BackupUtility/FileStateRepository.hpp"
 #include "BackupUtility/SQLiteSession.hpp"
 
 #include <atomic>
@@ -14,7 +15,6 @@
 #include <thread>
 #include <vector>
 
-#include <sqlite3.h>
 #include <xxhash.h>
 
 namespace fs = std::filesystem;
@@ -114,9 +114,9 @@ class DeletedFilesProcessor
 {
   public:
     DeletedFilesProcessor(const fs::path& sourceFolderPath, const fs::path& backupFolderPath, std::function<fs::path()> createSnapshotPathOnce,
-                          SQLiteSession& databaseSession, std::function<void(const BackupProgress&)> onProgressCallback)
+                          FileStateRepository& fileStateRepository, std::function<void(const BackupProgress&)> onProgressCallback)
         : _sourceFolderPath(sourceFolderPath), _backupFolderPath(backupFolderPath), _createSnapshotPathOnce(createSnapshotPathOnce),
-          _databaseSession(databaseSession), _onProgressCallback(onProgressCallback)
+          _fileStateRepository(fileStateRepository), _onProgressCallback(onProgressCallback)
     {
     }
 
@@ -125,31 +125,23 @@ class DeletedFilesProcessor
             try
             {
                 std::error_code errorCode;
-    
-                std::unique_ptr<sqlite3_stmt, SQLiteStmtDeleter> statement;
+
+                std::vector<FileStatusEntry> fileEntries;
                 try
                 {
-                    statement = _databaseSession.GetAllFiles();
+                    fileEntries = _fileStateRepository.GetAllFileStatuses();
                 }
                 catch (const std::runtime_error& e)
                 {
                     // TODO: Log error e.what()
                     return false;
                 }
-    
+
                 bool operationSucceeded = true;
-                while (SQLITE_ROW == sqlite3_step(statement.get()))
+                for (const auto& entry : fileEntries)
                 {
-                    const char* databasePathCString = reinterpret_cast<const char*>(sqlite3_column_text(statement.get(), 0));
-                    const char* statusCString = reinterpret_cast<const char*>(sqlite3_column_text(statement.get(), 1));
-    
-                    if ((nullptr == databasePathCString) || (nullptr == statusCString))
-                    {
-                        continue;
-                    }
-    
-                    std::string databasePath = databasePathCString;
-                    ChangeType fileStatus = StringToChangeType(statusCString);
+                    const std::string& databasePath = entry.path;
+                    ChangeType fileStatus = entry.status;
     
                     if (ChangeType::Deleted == fileStatus)
                     {
@@ -184,7 +176,7 @@ class DeletedFilesProcessor
     
                         try
                         {
-                            if (false == _databaseSession.MarkFileAsDeleted(databasePath, GetCurrentTimestamp())) // Explicit comparison
+                            if (false == _fileStateRepository.MarkFileAsDeleted(databasePath, GetCurrentTimestamp())) // Explicit comparison
                             {
                                 operationSucceeded = false;
                                 break;
@@ -216,18 +208,18 @@ class DeletedFilesProcessor
     const fs::path& _sourceFolderPath;
     const fs::path& _backupFolderPath;
     std::function<fs::path()> _createSnapshotPathOnce;
-    SQLiteSession& _databaseSession;
+    FileStateRepository& _fileStateRepository;
     std::function<void(const BackupProgress&)> _onProgressCallback;
 };
 
 class FileProcessor
 {
   public:
-    FileProcessor(const fs::path& sourceRoot, const fs::path& backupRoot, std::function<fs::path()> createSnapshotOnce,
-                  SQLiteSession& database, std::function<void(const BackupProgress&)> threadSafeProgress,
+        FileProcessor(const fs::path& sourceRoot, const fs::path& backupRoot, std::function<fs::path()> createSnapshotOnce,
+                                    FileStateRepository& fileStateRepository, std::function<void(const BackupProgress&)> threadSafeProgress,
                   std::atomic<bool>& success, std::atomic<std::size_t>& processedCount)
         : _sourceRoot(sourceRoot), _backupRoot(backupRoot), _createSnapshotOnce(createSnapshotOnce),
-          _database(database), _threadSafeProgress(threadSafeProgress),
+                    _fileStateRepository(fileStateRepository), _threadSafeProgress(threadSafeProgress),
           _success(success), _processedCount(processedCount)
     {
     }
@@ -257,7 +249,8 @@ class FileProcessor
         bool hasRecord = false;
         try
         {
-            hasRecord = _database.GetFileState(relativePath.string(), storedHash, storedStatus, storedTimestamp) && (storedStatus != ChangeType::Deleted);
+            hasRecord = _fileStateRepository.GetFileState(relativePath.string(), storedHash, storedStatus, storedTimestamp)
+                        && (storedStatus != ChangeType::Deleted);
         }
         catch (const std::runtime_error& e)
         {
@@ -299,7 +292,7 @@ class FileProcessor
 
         try
         {
-            if (false == _database.UpdateFileState(relativePath.string(), newHash, newStatus, timestampValue)) // Explicit comparison
+            if (false == _fileStateRepository.UpdateFileState(relativePath.string(), newHash, newStatus, timestampValue)) // Explicit comparison
             {
                 _success.store(false);
             }
@@ -318,7 +311,7 @@ class FileProcessor
     const fs::path& _sourceRoot;
     const fs::path& _backupRoot;
     std::function<fs::path()> _createSnapshotOnce;
-    SQLiteSession& _database;
+    FileStateRepository& _fileStateRepository;
     std::function<void(const BackupProgress&)> _threadSafeProgress;
     std::atomic<bool>& _success;
     std::atomic<std::size_t>& _processedCount;
@@ -352,8 +345,9 @@ bool RunBackup(const BackupConfig& config)
     };
 
     // Initialize database
-    SQLiteSession database(config.databaseFile);
-    if (false == database.InitializeSchema()) // Explicit comparison
+    SQLiteSession databaseSession(config.databaseFile);
+    FileStateRepository fileStateRepository(databaseSession);
+    if (false == fileStateRepository.InitializeSchema()) // Explicit comparison
     {
         return false;
     }
@@ -383,7 +377,7 @@ bool RunBackup(const BackupConfig& config)
     for (unsigned int i = 0; i < threadCount; ++i)
     {
         workers.emplace_back(std::thread([&]() {
-            FileProcessor fileProcessor(sourceRoot, backupRoot, CreateSnapshotOnce, database, threadSafeProgress, success, processedCount);
+            FileProcessor fileProcessor(sourceRoot, backupRoot, CreateSnapshotOnce, fileStateRepository, threadSafeProgress, success, processedCount);
             while (true)
             {
                 fs::path file;
@@ -440,7 +434,7 @@ bool RunBackup(const BackupConfig& config)
     // Handle deleted files
     if (true == success.load()) // Explicit comparison
     {
-        DeletedFilesProcessor deletedFilesProcessor(sourceRoot, backupRoot, CreateSnapshotOnce, database, threadSafeProgress);
+        DeletedFilesProcessor deletedFilesProcessor(sourceRoot, backupRoot, CreateSnapshotOnce, fileStateRepository, threadSafeProgress);
         success.store(deletedFilesProcessor.ProcessDeletedFiles());
     }
 
