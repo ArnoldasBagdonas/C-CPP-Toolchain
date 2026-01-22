@@ -6,10 +6,18 @@
 # Create the static library
 add_library(BackupUtility STATIC
     src/BackupUtility.cpp
+    src/TimestampProvider.cpp
+    src/FilesystemFileEnumerator.cpp
+    src/FilesystemSnapshotDirectory.cpp
     src/FileStateRepository.cpp
+    src/ProcessBackupFile.cpp
+    src/ProcessDeletedFiles.cpp
     src/SQLiteConnection.cpp
     src/SQLiteSession.cpp
     src/SQLiteStatement.cpp
+    src/SnapshotDirectoryProvider.cpp
+    src/ThreadedFileQueue.cpp
+    src/FileHasher.cpp
 )
 
 # Apply compiler flags for build type (Debug/Release/Coverage/Valgrind)
