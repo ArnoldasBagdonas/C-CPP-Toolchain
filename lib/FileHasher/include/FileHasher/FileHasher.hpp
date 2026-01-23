@@ -3,8 +3,6 @@
 #include <filesystem>
 #include <string>
 
-namespace fs = std::filesystem;
-
 /**
  * @brief Infrastructure component for hashing files using xxHash.
  */
@@ -18,5 +16,5 @@ class FileHasher
      * @param[out] outputHash Output hex-encoded hash string
      * @return true on success, false on error
      */
-    bool Compute(const fs::path& filePath, std::string& outputHash) const;
+    bool Compute(const std::filesystem::path& filePath, std::string& outputHash) const;
 };

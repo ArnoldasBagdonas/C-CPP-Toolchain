@@ -8,9 +8,10 @@ constexpr std::size_t UnknownProcessedCount = 0;
 constexpr std::size_t UnknownTotalCount = 0;
 }
 
-ProcessDeletedFiles::ProcessDeletedFiles(const fs::path& sourceFolderPath, const fs::path& backupFolderPath,
+ProcessDeletedFiles::ProcessDeletedFiles(const std::filesystem::path& sourceFolderPath, const std::filesystem::path& backupFolderPath,
                                          SnapshotDirectoryProvider& snapshotDirectory, FileStateRepository& fileStateRepository,
-                                         const TimestampProvider& timestampProvider, const std::function<void(const BackupProgress&)>& onProgress)
+                                         const TimestampProvider& timestampProvider,
+                                         const std::function<void(const BackupProgress&)>& onProgress)
     : _sourceFolderPath(sourceFolderPath), _backupFolderPath(backupFolderPath), _snapshotDirectory(snapshotDirectory),
       _fileStateRepository(fileStateRepository), _timestampProvider(timestampProvider), _onProgress(onProgress)
 {
@@ -43,14 +44,14 @@ bool ProcessDeletedFiles::Execute()
                 continue;
             }
 
-            fs::path sourceFilePath = _sourceFolderPath / databasePath;
-            fs::path currentFilePath = _backupFolderPath / databasePath;
+            std::filesystem::path sourceFilePath = _sourceFolderPath / databasePath;
+            std::filesystem::path currentFilePath = _backupFolderPath / databasePath;
 
             errorCode.clear();
-            const bool sourceExists = fs::exists(sourceFilePath, errorCode);
+            const bool sourceExists = std::filesystem::exists(sourceFilePath, errorCode);
             if ((0 != errorCode.value()) || (false == sourceExists))
             {
-                fs::path snapshotPath;
+                std::filesystem::path snapshotPath;
                 try
                 {
                     snapshotPath = _snapshotDirectory.GetOrCreate();
@@ -62,15 +63,15 @@ bool ProcessDeletedFiles::Execute()
                 }
 
                 errorCode.clear();
-                const bool currentExists = fs::exists(currentFilePath, errorCode);
+                const bool currentExists = std::filesystem::exists(currentFilePath, errorCode);
                 if ((0 == errorCode.value()) && (true == currentExists))
                 {
-                    fs::path archivedPath = snapshotPath / databasePath;
-                    fs::create_directories(archivedPath.parent_path(), errorCode);
-                    fs::copy_file(currentFilePath, archivedPath, fs::copy_options::overwrite_existing, errorCode);
+                    std::filesystem::path archivedPath = snapshotPath / databasePath;
+                    std::filesystem::create_directories(archivedPath.parent_path(), errorCode);
+                    std::filesystem::copy_file(currentFilePath, archivedPath, std::filesystem::copy_options::overwrite_existing, errorCode);
                 }
 
-                fs::remove(currentFilePath, errorCode);
+                std::filesystem::remove(currentFilePath, errorCode);
 
                 try
                 {

@@ -12,7 +12,7 @@ namespace
 constexpr int SqlTextLengthAuto = -1;
 }
 
-SQLiteConnection::SQLiteConnection(const fs::path& databasePath, int busyTimeoutMs) : _database(nullptr)
+SQLiteConnection::SQLiteConnection(const std::filesystem::path& databasePath, int busyTimeoutMs) : _database(nullptr)
 {
     if (SQLITE_OK != sqlite3_open(databasePath.string().c_str(), &_database))
     {

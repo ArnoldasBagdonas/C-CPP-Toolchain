@@ -1,6 +1,7 @@
 #include "ThreadedFileQueue/ThreadedFileQueue.hpp"
 
-ThreadedFileQueue::ThreadedFileQueue(unsigned int threadCount, std::size_t maxQueueSize, const std::function<void(const fs::path&)>& workItem)
+ThreadedFileQueue::ThreadedFileQueue(unsigned int threadCount, std::size_t maxQueueSize,
+                                     const std::function<void(const std::filesystem::path&)>& workItem)
     : _maxQueueSize(maxQueueSize), _workItem(workItem), _done(false), _finalized(false)
 {
     _workers.reserve(threadCount);
@@ -15,7 +16,7 @@ ThreadedFileQueue::~ThreadedFileQueue()
     Finalize();
 }
 
-void ThreadedFileQueue::Enqueue(const fs::path& file)
+void ThreadedFileQueue::Enqueue(const std::filesystem::path& file)
 {
     std::unique_lock lock(_queueMutex);
     _queueCv.wait(lock, [&]() { return _fileQueue.size() < _maxQueueSize; });
@@ -38,7 +39,7 @@ void ThreadedFileQueue::Finalize()
 
     for (auto& worker : _workers)
     {
-        if (worker.joinable())
+        if (true == worker.joinable())
         {
             worker.join();
         }
@@ -52,10 +53,10 @@ void ThreadedFileQueue::WorkerLoop()
 {
     while (true)
     {
-        fs::path file;
+        std::filesystem::path file;
         {
             std::unique_lock lock(_queueMutex);
-            _queueCv.wait(lock, [&]() { return _done || false == _fileQueue.empty(); });
+            _queueCv.wait(lock, [&]() { return (true == _done) || (false == _fileQueue.empty()); });
             if (true == _fileQueue.empty() && true == _done)
             {
                 return;

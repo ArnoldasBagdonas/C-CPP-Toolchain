@@ -3,8 +3,6 @@
 #include <filesystem>
 #include <functional>
 
-namespace fs = std::filesystem;
-
 /**
  * @brief Infrastructure component for enumerating files on the filesystem.
  */
@@ -17,5 +15,6 @@ class FileIterator
      * @param[in] path Root file or directory to enumerate
      * @param[in] onFile Callback invoked for each file
      */
-    void Iterate(const fs::path& path, const std::function<void(const fs::path&)>& onFile) const;
+    void Iterate(const std::filesystem::path& path,
+           const std::function<void(const std::filesystem::path&)>& onFile) const;
 };

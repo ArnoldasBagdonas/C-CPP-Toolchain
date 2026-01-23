@@ -11,7 +11,7 @@ constexpr std::size_t FileReadBufferSize = 8192;
 constexpr XXH64_hash_t HashSeed = 0;
 }
 
-bool FileHasher::Compute(const fs::path& filePath, std::string& outputHash) const
+bool FileHasher::Compute(const std::filesystem::path& filePath, std::string& outputHash) const
 {
     std::ifstream inputStream(filePath, std::ios::binary);
     if (false == inputStream.is_open())

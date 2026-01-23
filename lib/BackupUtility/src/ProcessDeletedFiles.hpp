@@ -8,8 +8,6 @@
 #include <filesystem>
 #include <functional>
 
-namespace fs = std::filesystem;
-
 /**
  * @brief Application component for handling files deleted from the source directory.
  */
@@ -26,7 +24,8 @@ class ProcessDeletedFiles
      * @param[in] timestampProvider Timestamp provider
      * @param[in] onProgress Progress callback
      */
-    ProcessDeletedFiles(const fs::path& sourceFolderPath, const fs::path& backupFolderPath, SnapshotDirectoryProvider& snapshotDirectory,
+    ProcessDeletedFiles(const std::filesystem::path& sourceFolderPath, const std::filesystem::path& backupFolderPath,
+              SnapshotDirectoryProvider& snapshotDirectory,
                         FileStateRepository& fileStateRepository, const TimestampProvider& timestampProvider,
                         const std::function<void(const BackupProgress&)>& onProgress);
 
@@ -38,8 +37,8 @@ class ProcessDeletedFiles
     bool Execute();
 
   private:
-    const fs::path& _sourceFolderPath;
-    const fs::path& _backupFolderPath;
+    const std::filesystem::path& _sourceFolderPath;
+    const std::filesystem::path& _backupFolderPath;
     SnapshotDirectoryProvider& _snapshotDirectory;
     FileStateRepository& _fileStateRepository;
     const TimestampProvider& _timestampProvider;

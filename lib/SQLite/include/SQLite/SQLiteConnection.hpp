@@ -9,8 +9,6 @@
 
 struct sqlite3;
 
-namespace fs = std::filesystem;
-
 /**
  * @brief RAII wrapper for a SQLite database connection.
  */
@@ -23,7 +21,7 @@ class SQLiteConnection
      * @param[in] databasePath Path to the SQLite database file
      * @param[in] busyTimeoutMs Busy timeout in milliseconds
      */
-    SQLiteConnection(const fs::path& databasePath, int busyTimeoutMs);
+    SQLiteConnection(const std::filesystem::path& databasePath, int busyTimeoutMs);
     /**
      * @brief Close the SQLite connection.
      */

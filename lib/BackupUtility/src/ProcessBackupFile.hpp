@@ -10,8 +10,6 @@
 #include <filesystem>
 #include <functional>
 
-namespace fs = std::filesystem;
-
 /**
  * @brief Application component for processing a single file during backup.
  */
@@ -31,7 +29,8 @@ class ProcessBackupFile
      * @param[in/out] success Shared success flag for the operation
      * @param[in/out] processedCount Shared processed counter
      */
-    ProcessBackupFile(const fs::path& sourceRoot, const fs::path& backupRoot, SnapshotDirectoryProvider& snapshotDirectory,
+    ProcessBackupFile(const std::filesystem::path& sourceRoot, const std::filesystem::path& backupRoot,
+              SnapshotDirectoryProvider& snapshotDirectory,
                       FileStateRepository& fileStateRepository, const FileHasher& fileHasher,
                       const TimestampProvider& timestampProvider, const std::function<void(const BackupProgress&)>& onProgress,
                       std::atomic<bool>& success, std::atomic<std::size_t>& processedCount);
@@ -41,11 +40,11 @@ class ProcessBackupFile
      *
      * @param[in] file File path to process
      */
-    void Execute(const fs::path& file);
+    void Execute(const std::filesystem::path& file);
 
   private:
-    const fs::path& _sourceRoot;
-    const fs::path& _backupRoot;
+    const std::filesystem::path& _sourceRoot;
+    const std::filesystem::path& _backupRoot;
     SnapshotDirectoryProvider& _snapshotDirectory;
     FileStateRepository& _fileStateRepository;
     const FileHasher& _fileHasher;

@@ -75,7 +75,7 @@ bool FileStateRepository::GetFileState(const std::string& filePath, std::string&
         const std::string statusText = statement.ColumnText(1);
         const std::string timestampText = statement.ColumnText(2);
 
-        if (hashText.empty() || statusText.empty() || timestampText.empty())
+        if ((true == hashText.empty()) || (true == statusText.empty()) || (true == timestampText.empty()))
         {
             return false;
         }
@@ -97,12 +97,12 @@ std::vector<FileStatusEntry> FileStateRepository::GetAllFileStatuses()
     auto statement = connection.Prepare("SELECT path, status FROM files;");
 
     std::vector<FileStatusEntry> results;
-    while (statement.FetchRow())
+    while (true == statement.FetchRow())
     {
         const std::string pathText = statement.ColumnText(0);
         const std::string statusText = statement.ColumnText(1);
 
-        if (pathText.empty() || statusText.empty())
+        if ((true == pathText.empty()) || (true == statusText.empty()))
         {
             continue;
         }

@@ -6,7 +6,7 @@
 
 #include <sqlite3.h>
 
-SQLiteSession::SQLiteSession(const fs::path& databasePath) : _databasePath(databasePath)
+SQLiteSession::SQLiteSession(const std::filesystem::path& databasePath) : _databasePath(databasePath)
 {
     sqlite3_config(SQLITE_CONFIG_SERIALIZED);
 }

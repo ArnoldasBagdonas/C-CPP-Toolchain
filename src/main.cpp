@@ -7,8 +7,6 @@
 #include <iostream>
 #include <optional> // Required for std::optional
 
-namespace fs = std::filesystem;
-
 namespace
 {
 
@@ -54,21 +52,21 @@ std::optional<BackupConfig> SetupBackupConfiguration(const cxxopts::ParseResult&
 {
     BackupConfig config;
 
-    config.sourceDir = fs::path(parseResult["source"].as<std::string>());
-    config.backupRoot = fs::path(parseResult["backup"].as<std::string>());
+    config.sourceDir = std::filesystem::path(parseResult["source"].as<std::string>());
+    config.backupRoot = std::filesystem::path(parseResult["backup"].as<std::string>());
     config.verbose = (0 < parseResult.count("verbose"));
 
     config.databaseFile = config.backupRoot / "backup.db";
 
     std::error_code errorCode;
-    config.sourceDir = fs::canonical(config.sourceDir, errorCode);
-    if ((0 != errorCode.value()) || (false == fs::is_directory(config.sourceDir)))
+    config.sourceDir = std::filesystem::canonical(config.sourceDir, errorCode);
+    if ((0 != errorCode.value()) || (false == std::filesystem::is_directory(config.sourceDir)))
     {
         std::cerr << "Invalid source directory\n";
         return std::nullopt;
     }
 
-    fs::create_directories(config.backupRoot, errorCode);
+    std::filesystem::create_directories(config.backupRoot, errorCode);
     if (0 != errorCode.value())
     {
         std::cerr << "Failed to create backup directory\n";

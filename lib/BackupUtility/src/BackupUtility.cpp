@@ -19,8 +19,6 @@
 #include <mutex>
 #include <thread>
 
-namespace fs = std::filesystem;
-
 namespace
 {
 constexpr unsigned int MaxQueueSizeMultiplier = 4;
@@ -32,16 +30,17 @@ bool RunBackup(const BackupConfig& config)
     std::atomic<bool> success{true};
     std::error_code ec;
 
-    fs::path sourceRoot = fs::is_regular_file(config.sourceDir, ec) ? config.sourceDir.parent_path() : config.sourceDir;
-    if ((0 != ec.value()) || (false == fs::exists(sourceRoot)))
+    std::filesystem::path sourceRoot = std::filesystem::is_regular_file(config.sourceDir, ec) ? config.sourceDir.parent_path()
+                                                                                               : config.sourceDir;
+    if ((0 != ec.value()) || (false == std::filesystem::exists(sourceRoot)))
     {
         return false;
     }
 
-    fs::path backupRoot = config.backupRoot / "backup";
-    fs::path historyRoot = config.backupRoot / "deleted";
-    fs::create_directories(backupRoot, ec);
-    fs::create_directories(historyRoot, ec);
+    std::filesystem::path backupRoot = config.backupRoot / "backup";
+    std::filesystem::path historyRoot = config.backupRoot / "deleted";
+    std::filesystem::create_directories(backupRoot, ec);
+    std::filesystem::create_directories(historyRoot, ec);
 
     SQLiteSession databaseSession(config.databaseFile);
     FileStateRepository fileStateRepository(databaseSession);
@@ -73,10 +72,11 @@ bool RunBackup(const BackupConfig& config)
     unsigned int threadCount = std::max(MinWorkerThreadCount, std::thread::hardware_concurrency());
     const std::size_t maxQueueSize = threadCount * MaxQueueSizeMultiplier;
 
-    ThreadedFileQueue fileQueue(threadCount, maxQueueSize, [&](const fs::path& file) { processBackupFile.Execute(file); });
+    ThreadedFileQueue fileQueue(threadCount, maxQueueSize,
+                                [&](const std::filesystem::path& file) { processBackupFile.Execute(file); });
 
     FileIterator iterator;
-    iterator.Iterate(config.sourceDir, [&](const fs::path& file) { fileQueue.Enqueue(file); });
+    iterator.Iterate(config.sourceDir, [&](const std::filesystem::path& file) { fileQueue.Enqueue(file); });
 
     fileQueue.Finalize();
 

@@ -2,10 +2,11 @@
 
 #include <filesystem>
 
-void FileIterator::Iterate(const fs::path& path, const std::function<void(const fs::path&)>& onFile) const
+void FileIterator::Iterate(const std::filesystem::path& path,
+                           const std::function<void(const std::filesystem::path&)>& onFile) const
 {
     std::error_code errorCode;
-    const bool isRegularFile = fs::is_regular_file(path, errorCode);
+    const bool isRegularFile = std::filesystem::is_regular_file(path, errorCode);
     if ((0 == errorCode.value()) && (true == isRegularFile))
     {
         onFile(path);
@@ -13,14 +14,14 @@ void FileIterator::Iterate(const fs::path& path, const std::function<void(const 
     }
 
     errorCode.clear();
-    const bool isDirectory = fs::is_directory(path, errorCode);
+    const bool isDirectory = std::filesystem::is_directory(path, errorCode);
     if ((0 != errorCode.value()) || (false == isDirectory))
     {
         return;
     }
 
     errorCode.clear();
-    for (auto& entry : fs::recursive_directory_iterator(path, errorCode))
+    for (auto& entry : std::filesystem::recursive_directory_iterator(path, errorCode))
     {
         if (0 != errorCode.value())
         {

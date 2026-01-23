@@ -10,8 +10,6 @@
 
 class SQLiteConnection;
 
-namespace fs = std::filesystem;
-
 /**
  * @brief Manages per-thread SQLite connections for a database file.
  */
@@ -28,7 +26,7 @@ class SQLiteSession
      *
      * @param[in] databasePath Path to the SQLite database file
      */
-    explicit SQLiteSession(const fs::path& databasePath);
+    explicit SQLiteSession(const std::filesystem::path& databasePath);
     /**
      * @brief Destroy the SQLite session.
      */
@@ -47,7 +45,7 @@ class SQLiteSession
   private:
     SQLiteConnection CreateConnection();
 
-    fs::path _databasePath;
+    std::filesystem::path _databasePath;
     std::mutex _connectionsMutex;
     std::unordered_map<std::thread::id, std::unique_ptr<SQLiteConnection>> _connections;
 };

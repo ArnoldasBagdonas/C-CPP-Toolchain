@@ -6,8 +6,6 @@
 #include <functional>
 #include <string>
 
-namespace fs = std::filesystem;
-
 /**
  * @brief Enumeration of possible file change states during backup operations.
  */
@@ -76,7 +74,7 @@ struct BackupProgress
     const char* stage;     /**< Current stage of backup operation */
     std::size_t processed; /**< Number of items processed so far */
     std::size_t total;     /**< Total number of items to process */
-    fs::path file;         /**< Currently processing file path */
+    std::filesystem::path file; /**< Currently processing file path */
 };
 
 /**
@@ -84,9 +82,9 @@ struct BackupProgress
  */
 struct BackupConfig
 {
-    fs::path sourceDir;    /**< Source directory to back up */
-    fs::path backupRoot;   /**< Root directory for backup storage */
-    fs::path databaseFile; /**< Path to SQLite database file for tracking state */
+    std::filesystem::path sourceDir;    /**< Source directory to back up */
+    std::filesystem::path backupRoot;   /**< Root directory for backup storage */
+    std::filesystem::path databaseFile; /**< Path to SQLite database file for tracking state */
 
     bool verbose; /**< Enable verbose progress output */
 

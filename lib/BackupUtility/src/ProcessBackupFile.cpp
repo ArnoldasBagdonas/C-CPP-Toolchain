@@ -7,20 +7,21 @@ namespace
 constexpr std::size_t UnknownTotalCount = 0;
 }
 
-ProcessBackupFile::ProcessBackupFile(const fs::path& sourceRoot, const fs::path& backupRoot, SnapshotDirectoryProvider& snapshotDirectory,
-                                     FileStateRepository& fileStateRepository, const FileHasher& fileHasher,
-                                     const TimestampProvider& timestampProvider, const std::function<void(const BackupProgress&)>& onProgress,
-                                     std::atomic<bool>& success, std::atomic<std::size_t>& processedCount)
+ProcessBackupFile::ProcessBackupFile(const std::filesystem::path& sourceRoot, const std::filesystem::path& backupRoot,
+                                     SnapshotDirectoryProvider& snapshotDirectory, FileStateRepository& fileStateRepository,
+                                     const FileHasher& fileHasher, const TimestampProvider& timestampProvider,
+                                     const std::function<void(const BackupProgress&)>& onProgress, std::atomic<bool>& success,
+                                     std::atomic<std::size_t>& processedCount)
     : _sourceRoot(sourceRoot), _backupRoot(backupRoot), _snapshotDirectory(snapshotDirectory), _fileStateRepository(fileStateRepository),
       _fileHasher(fileHasher), _timestampProvider(timestampProvider), _onProgress(onProgress), _success(success),
       _processedCount(processedCount)
 {
 }
 
-void ProcessBackupFile::Execute(const fs::path& file)
+void ProcessBackupFile::Execute(const std::filesystem::path& file)
 {
     std::error_code ec;
-    fs::path relativePath = fs::relative(file, _sourceRoot, ec);
+    std::filesystem::path relativePath = std::filesystem::relative(file, _sourceRoot, ec);
     if (0 != ec.value())
     {
         _success.store(false);
@@ -29,7 +30,7 @@ void ProcessBackupFile::Execute(const fs::path& file)
     if (std::string(".") == relativePath.string())
         relativePath = file.filename();
 
-    fs::path backupFile = _backupRoot / relativePath;
+    std::filesystem::path backupFile = _backupRoot / relativePath;
     std::string newHash;
     if (false == _fileHasher.Compute(file, newHash))
     {
@@ -60,14 +61,14 @@ void ProcessBackupFile::Execute(const fs::path& file)
     {
         newStatus = ChangeType::Added;
         timestampValue = _timestampProvider.NowFilesystemSafe();
-        fs::create_directories(backupFile.parent_path(), ec);
-        fs::copy_file(file, backupFile, fs::copy_options::overwrite_existing, ec);
+        std::filesystem::create_directories(backupFile.parent_path(), ec);
+        std::filesystem::copy_file(file, backupFile, std::filesystem::copy_options::overwrite_existing, ec);
     }
     else if (true == changed)
     {
         newStatus = ChangeType::Modified;
         timestampValue = _timestampProvider.NowFilesystemSafe();
-        fs::path snapshotFile;
+        std::filesystem::path snapshotFile;
         try
         {
             snapshotFile = _snapshotDirectory.GetOrCreate() / relativePath;
@@ -77,9 +78,9 @@ void ProcessBackupFile::Execute(const fs::path& file)
             _success.store(false);
             return;
         }
-        fs::create_directories(snapshotFile.parent_path(), ec);
-        fs::copy_file(backupFile, snapshotFile, fs::copy_options::overwrite_existing, ec);
-        fs::copy_file(file, backupFile, fs::copy_options::overwrite_existing, ec);
+        std::filesystem::create_directories(snapshotFile.parent_path(), ec);
+        std::filesystem::copy_file(backupFile, snapshotFile, std::filesystem::copy_options::overwrite_existing, ec);
+        std::filesystem::copy_file(file, backupFile, std::filesystem::copy_options::overwrite_existing, ec);
     }
 
     try

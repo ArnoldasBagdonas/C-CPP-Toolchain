@@ -2,16 +2,17 @@
 
 #include <utility>
 
-SnapshotDirectoryProvider::SnapshotDirectoryProvider(const fs::path& historyRootPath, const TimestampProvider& timestampProvider)
+SnapshotDirectoryProvider::SnapshotDirectoryProvider(const std::filesystem::path& historyRootPath,
+                                                     const TimestampProvider& timestampProvider)
     : _historyRootPath(historyRootPath), _timestampProvider(timestampProvider)
 {
 }
 
-fs::path SnapshotDirectoryProvider::GetOrCreate()
+std::filesystem::path SnapshotDirectoryProvider::GetOrCreate()
 {
     std::call_once(_snapshotFlag, [&]() {
         _snapshotPath = _historyRootPath / _timestampProvider.NowFilesystemSafe();
-        fs::create_directories(_snapshotPath);
+        std::filesystem::create_directories(_snapshotPath);
     });
     return _snapshotPath;
 }
