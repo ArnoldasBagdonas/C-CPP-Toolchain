@@ -6,6 +6,9 @@
 # Create the static library
 add_library(BackupUtility STATIC
     src/BackupUtility.cpp
+    src/FileStateRepository.cpp
+    src/ProcessBackupFile.cpp
+    src/ProcessDeletedFiles.cpp
 )
 
 # Apply compiler flags for build type (Debug/Release/Coverage/Valgrind)
@@ -16,13 +19,19 @@ target_include_directories(BackupUtility
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 # Link dependencies (internal only)
 target_link_libraries(BackupUtility
-    PRIVATE
-        sqlite3
-        xxhash_static
+    PUBLIC
+        FileHasher
+        FileIterator
+        SnapshotDirectoryProvider
+        SQLiteSession
+        ThreadedFileQueue
+        TimestampProvider
 )
 
 # Namespace alias for public-facing usage

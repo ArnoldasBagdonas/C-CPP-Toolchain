@@ -34,7 +34,7 @@ std::optional<cxxopts::ParseResult> ParseCommandLineOptions(int argc, char* argv
 
     auto parseResult = options.parse(argc, argv);
 
-    if ((true == parseResult.count("help")) || (false == parseResult.count("source")) || (false == parseResult.count("backup")))
+    if ((0 < parseResult.count("help")) || (0 == parseResult.count("source")) || (0 == parseResult.count("backup")))
     {
         std::cout << options.help() << '\n';
         return std::nullopt;
@@ -62,14 +62,14 @@ std::optional<BackupConfig> SetupBackupConfiguration(const cxxopts::ParseResult&
 
     std::error_code errorCode;
     config.sourceDir = fs::canonical(config.sourceDir, errorCode);
-    if ((true == errorCode.value()) || (false == fs::is_directory(config.sourceDir)))
+    if ((0 != errorCode.value()) || (false == fs::is_directory(config.sourceDir)))
     {
         std::cerr << "Invalid source directory\n";
         return std::nullopt;
     }
 
     fs::create_directories(config.backupRoot, errorCode);
-    if (true == errorCode.value())
+    if (0 != errorCode.value())
     {
         std::cerr << "Failed to create backup directory\n";
         return std::nullopt;
