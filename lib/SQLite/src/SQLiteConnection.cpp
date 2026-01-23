@@ -1,6 +1,6 @@
 // file SQLiteConnection.cpp
 
-#include "SQLiteSession/SQLiteConnection.hpp"
+#include "SQLite/SQLiteConnection.hpp"
 
 #include <sqlite3.h>
 

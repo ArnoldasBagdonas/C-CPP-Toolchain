@@ -2,7 +2,7 @@
 
 #include "FileStateRepository.hpp"
 
-#include "SQLiteSession/SQLiteConnection.hpp"
+#include "SQLite/SQLiteConnection.hpp"
 
 #include <stdexcept>
 

@@ -8,7 +8,7 @@
 #include "FileHasher/FileHasher.hpp"
 #include "FileIterator/FileIterator.hpp"
 #include "SnapshotDirectoryProvider/SnapshotDirectoryProvider.hpp"
-#include "SQLiteSession/SQLiteSession.hpp"
+#include "SQLite/SQLiteSession.hpp"
 #include "ThreadedFileQueue/ThreadedFileQueue.hpp"
 #include "TimestampProvider/TimestampProvider.hpp"
 

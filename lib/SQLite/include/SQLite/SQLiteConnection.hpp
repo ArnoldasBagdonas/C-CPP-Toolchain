@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "SQLiteSession/SQLiteStatement.hpp"
+#include "SQLite/SQLiteStatement.hpp"
 
 #include <filesystem>
 #include <string>

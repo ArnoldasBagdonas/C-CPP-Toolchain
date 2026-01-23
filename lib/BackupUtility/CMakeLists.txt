@@ -29,7 +29,7 @@ target_link_libraries(BackupUtility
         FileHasher
         FileIterator
         SnapshotDirectoryProvider
-        SQLiteSession
+        SQLite
         ThreadedFileQueue
         TimestampProvider
 )

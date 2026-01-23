@@ -1,6 +1,6 @@
 // file SQLiteStatement.cpp
 
-#include "SQLiteSession/SQLiteStatement.hpp"
+#include "SQLite/SQLiteStatement.hpp"
 
 #include <sqlite3.h>
 

@@ -1,8 +1,8 @@
 // file SQLiteSession.cpp
 
-#include "SQLiteSession/SQLiteSession.hpp"
+#include "SQLite/SQLiteSession.hpp"
 
-#include "SQLiteSession/SQLiteConnection.hpp"
+#include "SQLite/SQLiteConnection.hpp"
 
 #include <sqlite3.h>
 
