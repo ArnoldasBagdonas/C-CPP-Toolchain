@@ -3,7 +3,7 @@
 #pragma once
 
 #include "BackupUtility/BackupUtility.hpp"
-#include "BackupUtility/SQLiteSession.hpp"
+#include "SQLiteSession/SQLiteSession.hpp"
 
 #include <string>
 #include <vector>

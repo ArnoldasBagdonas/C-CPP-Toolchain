@@ -1,10 +1,10 @@
 #pragma once
 
 #include "BackupUtility/BackupUtility.hpp"
-#include "BackupUtility/TimestampProvider.hpp"
-#include "BackupUtility/FileStateRepository.hpp"
-#include "BackupUtility/SnapshotDirectoryProvider.hpp"
-#include "BackupUtility/FileHasher.hpp"
+#include "FileStateRepository.hpp"
+#include "FileHasher/FileHasher.hpp"
+#include "SnapshotDirectoryProvider/SnapshotDirectoryProvider.hpp"
+#include "TimestampProvider/TimestampProvider.hpp"
 
 #include <atomic>
 #include <filesystem>
@@ -19,8 +19,8 @@ class ProcessBackupFile
 {
   public:
     ProcessBackupFile(const fs::path& sourceRoot, const fs::path& backupRoot, SnapshotDirectoryProvider& snapshotDirectory,
-              FileStateRepository& fileStateRepository, const FileHasher& fileHasher,
-              const TimestampProvider& timestampProvider, const std::function<void(const BackupProgress&)>& onProgress,
+                      FileStateRepository& fileStateRepository, const FileHasher& fileHasher,
+                      const TimestampProvider& timestampProvider, const std::function<void(const BackupProgress&)>& onProgress,
                       std::atomic<bool>& success, std::atomic<std::size_t>& processedCount);
 
     void Execute(const fs::path& file);

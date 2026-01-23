@@ -1,16 +1,16 @@
 // file BackupUtility.cpp
 #include "BackupUtility/BackupUtility.hpp"
 
-#include "BackupUtility/TimestampProvider.hpp"
-#include "BackupUtility/FileStateRepository.hpp"
-#include "BackupUtility/FilesystemFileEnumerator.hpp"
-#include "BackupUtility/FilesystemSnapshotDirectory.hpp"
-#include "BackupUtility/ProcessBackupFile.hpp"
-#include "BackupUtility/ProcessDeletedFiles.hpp"
-#include "BackupUtility/SQLiteSession.hpp"
-#include "BackupUtility/SnapshotDirectoryProvider.hpp"
-#include "BackupUtility/ThreadedFileQueue.hpp"
-#include "BackupUtility/FileHasher.hpp"
+#include "FileStateRepository.hpp"
+#include "ProcessBackupFile.hpp"
+#include "ProcessDeletedFiles.hpp"
+
+#include "FileHasher/FileHasher.hpp"
+#include "FileIterator/FileIterator.hpp"
+#include "SnapshotDirectoryProvider/SnapshotDirectoryProvider.hpp"
+#include "SQLiteSession/SQLiteSession.hpp"
+#include "ThreadedFileQueue/ThreadedFileQueue.hpp"
+#include "TimestampProvider/TimestampProvider.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -64,8 +64,7 @@ bool RunBackup(const BackupConfig& config)
     std::atomic<std::size_t> processedCount{0};
 
     TimestampProvider timestampProvider;
-    FilesystemSnapshotDirectory snapshotDirectory(timestampProvider);
-    SnapshotDirectoryProvider snapshotOnce(historyRoot, snapshotDirectory);
+    SnapshotDirectoryProvider snapshotOnce(historyRoot, timestampProvider);
     FileHasher fileHasher;
 
     ProcessBackupFile processBackupFile(sourceRoot, backupRoot, snapshotOnce, fileStateRepository, fileHasher, timestampProvider,
@@ -76,8 +75,8 @@ bool RunBackup(const BackupConfig& config)
 
     ThreadedFileQueue fileQueue(threadCount, maxQueueSize, [&](const fs::path& file) { processBackupFile.Execute(file); });
 
-    FilesystemFileEnumerator enumerator;
-    enumerator.Enumerate(config.sourceDir, [&](const fs::path& file) { fileQueue.Enqueue(file); });
+    FileIterator iterator;
+    iterator.Iterate(config.sourceDir, [&](const fs::path& file) { fileQueue.Enqueue(file); });
 
     fileQueue.Finalize();
 

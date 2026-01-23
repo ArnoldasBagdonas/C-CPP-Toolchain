@@ -1,6 +1,8 @@
 // file FileStateRepository.cpp
 
-#include "BackupUtility/FileStateRepository.hpp"
+#include "FileStateRepository.hpp"
+
+#include "SQLiteSession/SQLiteConnection.hpp"
 
 #include <stdexcept>
 

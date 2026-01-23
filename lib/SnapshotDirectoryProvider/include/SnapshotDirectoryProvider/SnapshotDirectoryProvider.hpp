@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BackupUtility/FilesystemSnapshotDirectory.hpp"
+#include "TimestampProvider/TimestampProvider.hpp"
 
 #include <filesystem>
 #include <mutex>
@@ -13,13 +13,13 @@ namespace fs = std::filesystem;
 class SnapshotDirectoryProvider
 {
   public:
-    SnapshotDirectoryProvider(const fs::path& historyRootPath, const FilesystemSnapshotDirectory& snapshotDirectory);
+    SnapshotDirectoryProvider(const fs::path& historyRootPath, const TimestampProvider& timestampProvider);
 
     fs::path GetOrCreate();
 
   private:
     fs::path _historyRootPath;
-    const FilesystemSnapshotDirectory& _snapshotDirectory;
+    const TimestampProvider& _timestampProvider;
     std::once_flag _snapshotFlag;
     fs::path _snapshotPath;
 };

@@ -2,13 +2,13 @@
 
 #pragma once
 
-#include "BackupUtility/SQLiteConnection.hpp"
-
 #include <filesystem>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
+
+class SQLiteConnection;
 
 namespace fs = std::filesystem;
 
@@ -26,6 +26,7 @@ class SQLiteSession
      * @param[in] databasePath Path to the SQLite database file
      */
     explicit SQLiteSession(const fs::path& databasePath);
+    ~SQLiteSession();
 
     SQLiteSession(const SQLiteSession&) = delete;
     SQLiteSession& operator=(const SQLiteSession&) = delete;

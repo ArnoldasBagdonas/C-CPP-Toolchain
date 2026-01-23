@@ -1,8 +1,8 @@
-#include "BackupUtility/FilesystemFileEnumerator.hpp"
+#include "FileIterator/FileIterator.hpp"
 
 #include <filesystem>
 
-void FilesystemFileEnumerator::Enumerate(const fs::path& path, const std::function<void(const fs::path&)>& onFile) const
+void FileIterator::Iterate(const fs::path& path, const std::function<void(const fs::path&)>& onFile) const
 {
     std::error_code ec;
     if (true == fs::is_regular_file(path, ec))

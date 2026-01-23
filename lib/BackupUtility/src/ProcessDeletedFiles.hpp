@@ -1,9 +1,9 @@
 #pragma once
 
 #include "BackupUtility/BackupUtility.hpp"
-#include "BackupUtility/TimestampProvider.hpp"
-#include "BackupUtility/FileStateRepository.hpp"
-#include "BackupUtility/SnapshotDirectoryProvider.hpp"
+#include "FileStateRepository.hpp"
+#include "SnapshotDirectoryProvider/SnapshotDirectoryProvider.hpp"
+#include "TimestampProvider/TimestampProvider.hpp"
 
 #include <filesystem>
 #include <functional>
@@ -17,7 +17,7 @@ class ProcessDeletedFiles
 {
   public:
     ProcessDeletedFiles(const fs::path& sourceFolderPath, const fs::path& backupFolderPath, SnapshotDirectoryProvider& snapshotDirectory,
-              FileStateRepository& fileStateRepository, const TimestampProvider& timestampProvider,
+                        FileStateRepository& fileStateRepository, const TimestampProvider& timestampProvider,
                         const std::function<void(const BackupProgress&)>& onProgress);
 
     bool Execute();
