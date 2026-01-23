@@ -9,6 +9,15 @@
 
 namespace
 {
+constexpr int SqlTextLengthAuto = -1;
+
+/**
+ * @brief Build a SQLite error with context prefix.
+ *
+ * @param[in] statement SQLite statement handle
+ * @param[in] prefix Context prefix for the error message
+ * @return Runtime error describing the SQLite failure
+ */
 std::runtime_error MakeSqliteError(sqlite3_stmt* statement, const std::string& prefix)
 {
     sqlite3* database = sqlite3_db_handle(statement);
@@ -46,7 +55,7 @@ SQLiteStatement& SQLiteStatement::operator=(SQLiteStatement&& other) noexcept
 
 void SQLiteStatement::BindText(int index, const std::string& value)
 {
-    if (SQLITE_OK != sqlite3_bind_text(_statement, index, value.c_str(), -1, SQLITE_TRANSIENT))
+    if (SQLITE_OK != sqlite3_bind_text(_statement, index, value.c_str(), SqlTextLengthAuto, SQLITE_TRANSIENT))
     {
         throw MakeSqliteError(_statement, "Failed to bind text parameter: ");
     }
@@ -54,7 +63,7 @@ void SQLiteStatement::BindText(int index, const std::string& value)
 
 void SQLiteStatement::BindText(int index, const char* value)
 {
-    if (SQLITE_OK != sqlite3_bind_text(_statement, index, value, -1, SQLITE_TRANSIENT))
+    if (SQLITE_OK != sqlite3_bind_text(_statement, index, value, SqlTextLengthAuto, SQLITE_TRANSIENT))
     {
         throw MakeSqliteError(_statement, "Failed to bind text parameter: ");
     }
@@ -98,6 +107,9 @@ std::string SQLiteStatement::ColumnText(int index) const
     return reinterpret_cast<const char*>(value);
 }
 
+/**
+ * @brief Finalize the current SQLite statement handle.
+ */
 void SQLiteStatement::Finalize()
 {
     if (nullptr != _statement)

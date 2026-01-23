@@ -2,6 +2,11 @@
 
 #include <ctime>
 
+namespace
+{
+constexpr std::size_t TimestampBufferSize = 32;
+}
+
 std::string TimestampProvider::NowFilesystemSafe() const
 {
     std::time_t currentTime = std::time(nullptr);
@@ -13,7 +18,7 @@ std::string TimestampProvider::NowFilesystemSafe() const
     localtime_r(&currentTime, &timeStruct);
 #endif
 
-    char buffer[32];
+    char buffer[TimestampBufferSize];
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%d_%H-%M-%S", &timeStruct);
     return buffer;
 }

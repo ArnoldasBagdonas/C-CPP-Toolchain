@@ -45,6 +45,9 @@ void ThreadedFileQueue::Finalize()
     }
 }
 
+/**
+ * @brief Worker thread loop for processing queued files.
+ */
 void ThreadedFileQueue::WorkerLoop()
 {
     while (true)

@@ -11,5 +11,11 @@ namespace fs = std::filesystem;
 class FileIterator
 {
   public:
+    /**
+     * @brief Iterate files under the provided path.
+     *
+     * @param[in] path Root file or directory to enumerate
+     * @param[in] onFile Callback invoked for each file
+     */
     void Iterate(const fs::path& path, const std::function<void(const fs::path&)>& onFile) const;
 };

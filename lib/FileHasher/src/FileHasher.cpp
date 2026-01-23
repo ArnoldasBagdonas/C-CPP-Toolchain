@@ -8,6 +8,7 @@
 namespace
 {
 constexpr std::size_t FileReadBufferSize = 8192;
+constexpr XXH64_hash_t HashSeed = 0;
 }
 
 bool FileHasher::Compute(const fs::path& filePath, std::string& outputHash) const
@@ -24,17 +25,23 @@ bool FileHasher::Compute(const fs::path& filePath, std::string& outputHash) cons
         return false;
     }
 
-    XXH64_reset(hashState, 0);
+    XXH64_reset(hashState, HashSeed);
 
     char buffer[FileReadBufferSize];
-    while (inputStream.read(buffer, sizeof(buffer)))
+    const std::streamsize bufferSize = static_cast<std::streamsize>(sizeof(buffer));
+    while (true)
     {
-        XXH64_update(hashState, buffer, sizeof(buffer));
-    }
-
-    if (inputStream.gcount() > 0)
-    {
-        XXH64_update(hashState, buffer, static_cast<size_t>(inputStream.gcount()));
+        inputStream.read(buffer, bufferSize);
+        const std::streamsize bytesRead = inputStream.gcount();
+        if (0 == bytesRead)
+        {
+            break;
+        }
+        XXH64_update(hashState, buffer, static_cast<size_t>(bytesRead));
+        if (bufferSize > bytesRead)
+        {
+            break;
+        }
     }
 
     uint64_t hashValue = XXH64_digest(hashState);

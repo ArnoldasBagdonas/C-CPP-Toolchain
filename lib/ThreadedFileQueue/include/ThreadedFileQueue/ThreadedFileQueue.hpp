@@ -16,10 +16,28 @@ namespace fs = std::filesystem;
 class ThreadedFileQueue
 {
   public:
+    /**
+     * @brief Construct a threaded work queue.
+     *
+     * @param[in] threadCount Number of worker threads
+     * @param[in] maxQueueSize Maximum queued items before producers block
+     * @param[in] workItem Work item callback
+     */
     ThreadedFileQueue(unsigned int threadCount, std::size_t maxQueueSize, const std::function<void(const fs::path&)>& workItem);
+    /**
+     * @brief Finalize and join worker threads.
+     */
     ~ThreadedFileQueue();
 
+    /**
+     * @brief Enqueue a file for processing.
+     *
+     * @param[in] file File path to enqueue
+     */
     void Enqueue(const fs::path& file);
+    /**
+     * @brief Signal completion and wait for workers to finish.
+     */
     void Finalize();
 
   private:

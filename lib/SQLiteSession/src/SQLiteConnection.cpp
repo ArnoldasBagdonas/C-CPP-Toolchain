@@ -7,6 +7,11 @@
 #include <stdexcept>
 #include <utility>
 
+namespace
+{
+constexpr int SqlTextLengthAuto = -1;
+}
+
 SQLiteConnection::SQLiteConnection(const fs::path& databasePath, int busyTimeoutMs) : _database(nullptr)
 {
     if (SQLITE_OK != sqlite3_open(databasePath.string().c_str(), &_database))
@@ -19,7 +24,7 @@ SQLiteConnection::SQLiteConnection(const fs::path& databasePath, int busyTimeout
         throw std::runtime_error("Failed to set SQLite busy timeout.");
     }
 
-    EnableWalMode();
+    EnableWriteAheadLoggingMode();
 }
 
 SQLiteConnection::~SQLiteConnection()
@@ -61,14 +66,17 @@ void SQLiteConnection::Execute(const std::string& sqlStatement)
 SQLiteStatement SQLiteConnection::Prepare(const std::string& sqlStatement)
 {
     sqlite3_stmt* statement = nullptr;
-    if (SQLITE_OK != sqlite3_prepare_v2(_database, sqlStatement.c_str(), -1, &statement, nullptr))
+    if (SQLITE_OK != sqlite3_prepare_v2(_database, sqlStatement.c_str(), SqlTextLengthAuto, &statement, nullptr))
     {
         throw std::runtime_error(sqlite3_errmsg(_database));
     }
     return SQLiteStatement(statement);
 }
 
-void SQLiteConnection::EnableWalMode()
+/**
+ * @brief Enable write-ahead logging for the connection.
+ */
+void SQLiteConnection::EnableWriteAheadLoggingMode()
 {
     char* errorMessage = nullptr;
     if (SQLITE_OK != sqlite3_exec(_database, "PRAGMA journal_mode=WAL;", nullptr, nullptr, &errorMessage))

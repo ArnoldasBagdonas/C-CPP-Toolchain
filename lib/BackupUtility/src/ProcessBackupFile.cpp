@@ -2,6 +2,11 @@
 
 #include <filesystem>
 
+namespace
+{
+constexpr std::size_t UnknownTotalCount = 0;
+}
+
 ProcessBackupFile::ProcessBackupFile(const fs::path& sourceRoot, const fs::path& backupRoot, SnapshotDirectoryProvider& snapshotDirectory,
                                      FileStateRepository& fileStateRepository, const FileHasher& fileHasher,
                                      const TimestampProvider& timestampProvider, const std::function<void(const BackupProgress&)>& onProgress,
@@ -16,7 +21,7 @@ void ProcessBackupFile::Execute(const fs::path& file)
 {
     std::error_code ec;
     fs::path relativePath = fs::relative(file, _sourceRoot, ec);
-    if (ec)
+    if (0 != ec.value())
     {
         _success.store(false);
         return;
@@ -39,7 +44,7 @@ void ProcessBackupFile::Execute(const fs::path& file)
     try
     {
         hasRecord = _fileStateRepository.GetFileState(relativePath.string(), storedHash, storedStatus, storedTimestamp)
-                    && (storedStatus != ChangeType::Deleted);
+                && (ChangeType::Deleted != storedStatus);
     }
     catch (const std::runtime_error&)
     {
@@ -92,6 +97,6 @@ void ProcessBackupFile::Execute(const fs::path& file)
 
     if (nullptr != _onProgress)
     {
-        _onProgress({"collecting", ++_processedCount, 0, file});
+        _onProgress({"collecting", ++_processedCount, UnknownTotalCount, file});
     }
 }

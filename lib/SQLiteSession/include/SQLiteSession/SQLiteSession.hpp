@@ -18,6 +18,9 @@ namespace fs = std::filesystem;
 class SQLiteSession
 {
   public:
+    /**
+     * @brief Default busy timeout for SQLite connections.
+     */
     static constexpr int SqliteBusyTimeoutMs = 5000;
 
     /**
@@ -26,6 +29,9 @@ class SQLiteSession
      * @param[in] databasePath Path to the SQLite database file
      */
     explicit SQLiteSession(const fs::path& databasePath);
+    /**
+     * @brief Destroy the SQLite session.
+     */
     ~SQLiteSession();
 
     SQLiteSession(const SQLiteSession&) = delete;

@@ -32,6 +32,11 @@ SQLiteConnection& SQLiteSession::Acquire()
     }
 }
 
+/**
+ * @brief Create a new SQLite connection for the current session.
+ *
+ * @return New SQLiteConnection instance
+ */
 SQLiteConnection SQLiteSession::CreateConnection()
 {
     return SQLiteConnection(_databasePath, SqliteBusyTimeoutMs);

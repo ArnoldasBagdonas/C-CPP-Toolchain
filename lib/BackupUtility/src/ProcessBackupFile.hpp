@@ -18,11 +18,29 @@ namespace fs = std::filesystem;
 class ProcessBackupFile
 {
   public:
+    /**
+     * @brief Construct a processor for individual backup files.
+     *
+     * @param[in] sourceRoot Root path of the source directory
+     * @param[in] backupRoot Root path of the backup directory
+     * @param[in] snapshotDirectory Provider for snapshot directories
+     * @param[in] fileStateRepository Repository for file state tracking
+     * @param[in] fileHasher File hashing utility
+     * @param[in] timestampProvider Timestamp provider
+     * @param[in] onProgress Progress callback
+     * @param[in/out] success Shared success flag for the operation
+     * @param[in/out] processedCount Shared processed counter
+     */
     ProcessBackupFile(const fs::path& sourceRoot, const fs::path& backupRoot, SnapshotDirectoryProvider& snapshotDirectory,
                       FileStateRepository& fileStateRepository, const FileHasher& fileHasher,
                       const TimestampProvider& timestampProvider, const std::function<void(const BackupProgress&)>& onProgress,
                       std::atomic<bool>& success, std::atomic<std::size_t>& processedCount);
 
+    /**
+     * @brief Process a single file for backup and state tracking.
+     *
+     * @param[in] file File path to process
+     */
     void Execute(const fs::path& file);
 
   private:

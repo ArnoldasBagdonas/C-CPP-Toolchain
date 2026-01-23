@@ -8,5 +8,10 @@
 class TimestampProvider
 {
   public:
+    /**
+     * @brief Get a filesystem-safe timestamp string.
+     *
+     * @return Timestamp string formatted for file names
+     */
     std::string NowFilesystemSafe() const;
 };

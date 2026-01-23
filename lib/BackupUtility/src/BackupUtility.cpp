@@ -24,16 +24,16 @@ namespace fs = std::filesystem;
 namespace
 {
 constexpr unsigned int MaxQueueSizeMultiplier = 4;
+constexpr unsigned int MinWorkerThreadCount = 1;
 }
 
-/** Run backup with multithreaded file processing */
 bool RunBackup(const BackupConfig& config)
 {
     std::atomic<bool> success{true};
     std::error_code ec;
 
     fs::path sourceRoot = fs::is_regular_file(config.sourceDir, ec) ? config.sourceDir.parent_path() : config.sourceDir;
-    if (ec || !fs::exists(sourceRoot))
+    if ((0 != ec.value()) || (false == fs::exists(sourceRoot)))
     {
         return false;
     }
@@ -70,7 +70,7 @@ bool RunBackup(const BackupConfig& config)
     ProcessBackupFile processBackupFile(sourceRoot, backupRoot, snapshotOnce, fileStateRepository, fileHasher, timestampProvider,
                                         threadSafeProgress, success, processedCount);
 
-    unsigned int threadCount = std::max(1u, std::thread::hardware_concurrency());
+    unsigned int threadCount = std::max(MinWorkerThreadCount, std::thread::hardware_concurrency());
     const std::size_t maxQueueSize = threadCount * MaxQueueSizeMultiplier;
 
     ThreadedFileQueue fileQueue(threadCount, maxQueueSize, [&](const fs::path& file) { processBackupFile.Execute(file); });
