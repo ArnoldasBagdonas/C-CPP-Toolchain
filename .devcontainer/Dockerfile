@@ -118,7 +118,8 @@ RUN mkdir -p /usr/share/fonts/truetype/msttcorefonts && \
 # PlantUML
 # ------------------------------------------------------------------------------
 WORKDIR /opt/plantuml
-RUN wget -q https://netcologne.dl.sourceforge.net/project/plantuml/plantuml.jar
+#RUN wget -q https://netcologne.dl.sourceforge.net/project/plantuml/plantuml.jar
+RUN wget -q https://downloads.sourceforge.net/project/plantuml/plantuml.jar -O plantuml.jar
 
 RUN echo 'alias plantuml="java -jar /opt/plantuml/plantuml.jar"' \
     >> /etc/bash.bashrc
