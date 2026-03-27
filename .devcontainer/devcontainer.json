@@ -48,6 +48,12 @@
     "workspaceFolder": "/workspace",
 
     "remoteUser": "vscode",
-
-    "postCreateCommand": "find . -type f \\( -name \"*.cpp\" -o -name \"*.h\" -o -name \"*.c\" -o -name \"*.hpp\" -o -name \"*.txt\" -o -name \"*.sh\" \\) -exec sed -i 's/\\r$//' {} +"
+    // Podman-specific settings for Dev Containers
+    "remoteEnv": {
+        "PODMAN_USERNS": "keep-id"
+    },
+    "containerUser": "vscode",
+    // Normalize line endings to Unix (LF) for all source and script files after container creation.
+    // This ensures consistency and prevents issues caused by Windows (CRLF) endings in .cpp, .h, .c, .hpp, .txt, and .sh files.
+    //"postCreateCommand": "find . -type f \\( -name \"*.cpp\" -o -name \"*.h\" -o -name \"*.c\" -o -name \"*.hpp\" -o -name \"*.txt\" -o -name \"*.sh\" \\) -exec sed -i 's/\\r$//' {} +"
 }
