@@ -3,41 +3,12 @@
     "configurations": [
         {
             "name": "Debug C/C++",
+            "type": "cppdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "preLaunchTask": "CMake: build",
-            "windows": {
-                "type": "cppvsdbg"
-            },
-            "linux": {
-                "type": "cppdbg",
-                "MIMode": "gdb",
-                "setupCommands": [
-                    {
-                        "description": "Enable pretty-printing for gdb",
-                        "text": "-enable-pretty-printing",
-                        "ignoreFailures": true
-                    }
-                ]
-            },
-            "osx": {
-                "type": "cppdbg",
-                "MIMode": "lldb"
-            }
-        },
-        {
-            "name": "Debug CTest Executable",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${command:cmake.buildDirectory}/tests/unit_tests",
-            "args": [],
-            "stopAtEntry": false,
             "cwd": "${command:cmake.buildDirectory}",
-            "console": "integratedTerminal",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb",
             "setupCommands": [
