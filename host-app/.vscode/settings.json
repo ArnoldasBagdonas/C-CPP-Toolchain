@@ -27,7 +27,7 @@
     "cmake.installPrefix": "/tmp/install",
 
     // Number of parallel jobs for building
-    "cmake.parallelJobs": 4, // optional parallel build jobs
+    "cmake.parallelJobs": 0, // auto-detect number of CPU cores
 
     // Debugger configuration for CMake Tools
     "cmake.debugConfig": {

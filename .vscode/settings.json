@@ -1,19 +1,57 @@
 {
-    // CMake Tools settings
+    // =========================
+    // CMake Tools configuration
+    // =========================
+
+    // Directory where CMake will place build files
     "cmake.buildDirectory": "${workspaceFolder}/build",
     //"cmake.buildDirectory": "/tmp/build",
+
+    // Automatically run CMake configure when opening the folder
     "cmake.configureOnOpen": true,
-    "cmake.generator": "Ninja",               // Recommended: Ninja, can change to "Unix Makefiles" if needed
+
+    // Generator to use for CMake (Ninja is fast and recommended)
+    "cmake.generator": "Ninja", // Recommended: Ninja, can change to "Unix Makefiles" if needed
+
+    // List of preferred generators for CMake
     "cmake.preferredGenerators": ["Ninja"],
-    "cmake.configureArgs": [],                // optional extra args for configuration
-    "cmake.buildArgs": [],                    // optional extra args for build
-    "cmake.installPrefix": "${workspaceFolder}/install",  // optional install directory
-    //"cmake.installPrefix": "/tmp/install",  // optional install directory
-    "cmake.parallelJobs": 4,                   // optional parallel build jobs
+
+    // Extra arguments to pass to CMake during configuration
+    "cmake.configureArgs": [], // optional extra args for configuration
+
+    // Extra arguments to pass to CMake during build
+    "cmake.buildArgs": [], // optional extra args for build
+
+    // Directory where CMake will install files (if used)
+    "cmake.installPrefix": "${workspaceFolder}/install",
+    //"cmake.installPrefix": "/tmp/install",
+
+    // Number of parallel jobs for building
+    "cmake.parallelJobs": 0, // auto-detect number of CPU cores
+
+    // Debugger configuration for CMake Tools
     "cmake.debugConfig": {
-        "MIMode": "gdb",
-        "miDebuggerPath": "/usr/bin/gdb"
-    }
-    // Use Podman for Dev Containers
+        "MIMode": "gdb", // Debugger mode (gdb for GNU Debugger)
+        "miDebuggerPath": "/usr/bin/gdb" // Path to gdb executable
+    },
+
+    // =========================
+    // TestMate C++ Test Adapter
+    // =========================
+
+    // List of advanced test executables for TestMate
+    "testMate.cpp.test.advancedExecutables": [
+        {
+            // Pattern to match test executables (adjust as needed)
+            "pattern": "${workspaceFolder}/build/tests/*",
+            //"pattern": "/tmp/build/tests/*",
+        }
+    ],
+
+    // =========================
+    // Dev Containers (Podman)
+    // =========================
+
+    // Use Podman instead of Docker for Dev Containers
     "dev.containers.dockerPath": "podman"
 }
