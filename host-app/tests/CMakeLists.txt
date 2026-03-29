@@ -128,3 +128,11 @@ if(PROJECT_BUILD_VARIANT STREQUAL "VALGRIND")
       add_valgrind_test(host_sanitizer_tests)
     endif()
 endif()
+
+# -----------------------------------------------------------------------------
+# Code coverage
+# -----------------------------------------------------------------------------
+
+if(PROJECT_BUILD_VARIANT STREQUAL "COVERAGE")
+    add_coverage_report(host_unit_tests)
+endif()

@@ -29,6 +29,11 @@ endif()
 # ----------------------------------------------------------------------------- 
 include(cmake/compiler_flags.cmake)
 
+# -----------------------------------------------------------------------------
+# Code coverage helper
+# -----------------------------------------------------------------------------
+include(cmake/coverage/coverage_report.cmake)
+
 # ----------------------------------------------------------------------------- 
 # Third-party dependencies
 # ----------------------------------------------------------------------------- 
@@ -63,15 +68,5 @@ add_subdirectory(tests)
 # ----------------------------------------------------------------------------- 
 include(cmake/clang_format.cmake)
 
-# ----------------------------------------------------------------------------- 
-# Code coverage (only for Coverage build type)
-# ----------------------------------------------------------------------------- 
-if(PROJECT_BUILD_VARIANT STREQUAL "COVERAGE")
-    if(MSVC)
-        include(cmake/coverage/msvc_coverage.cmake)
-    elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
-        include(cmake/coverage/clang_coverage.cmake)
-    elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
-        include(cmake/coverage/gcc_coverage.cmake)
-    endif()
-endif()
+
+
