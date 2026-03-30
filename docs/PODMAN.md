@@ -99,6 +99,19 @@ If using the compatibility symlink:
 ```cmd
 docker run hello-world
 ```
+## 6. Recreate the Podman machine
+
+If the machine reports as running but the API endpoint refuses connections, the state is corrupted (stale connection, broken port forward, or WSL desync). At this point, stop troubleshooting incrementally and rebuild the machine cleanly:
+
+
+```cmd
+podman machine stop
+wsl --shutdown
+Start-Sleep -Seconds 5
+podman machine start
+podman system connection list
+podman info
+```
 
 ---
 
