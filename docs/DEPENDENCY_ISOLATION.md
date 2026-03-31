@@ -57,10 +57,10 @@ third_party/
 
 The `third_party/` directory uses a **two-tier source management** approach:
 
-| Directory              | Purpose                                                        | Tracked in Git? |
-| ---------------------- | -------------------------------------------------------------- | ---------------- |
-| `third_party/src/`     | Extracted source trees — allows local modifications and review | ✅ Yes           |
-| `third_party/downloads/` | Original archive tarballs used as a fallback                 | ✅ Yes           |
+| Directory                | Purpose                                                        | Tracked in Git?  |
+| ------------------------ | -------------------------------------------------------------- | ---------------- |
+| `third_party/src/`       | Extracted source trees — allows local modifications and review | Yes              |
+| `third_party/downloads/` | Original archive tarballs used as a fallback                   | Yes              |
 
 **How it works:**
 
@@ -176,11 +176,100 @@ target_link_libraries(my_tests PRIVATE
 
 ---
 
-### ♻️ Reusability
+### Reusability
 
 * Dependencies built once
 * Can be reused across multiple projects
 * CI-friendly (cacheable)
+
+---
+
+## Sanitizer Builds and Third-Party Dependencies
+
+### The Problem
+
+Sanitizers (ASan, TSan, MSan, UBSan) work by instrumenting code at compile
+time. For correct operation, **all code linked into the final binary** must be
+compiled with the same sanitizer flags — including third-party libraries.
+
+If the main project is compiled with `-fsanitize=address` but links against a
+GoogleTest built without it, you may get:
+
+* False negatives (bugs in third-party call paths go undetected)
+* Missing stack traces
+* Linker errors or runtime crashes
+* Massive false positives (especially with MemorySanitizer)
+
+### Which Build Types Need Matching Third-Party Flags?
+
+| Build Type                   | Third-party needs same flags? | Why                                                    |
+| ---------------------------- | ----------------------------- | ------------------------------------------------------ |
+| Debug / Release              | ❌ No                         | Standard flags — ABI compatible                        |
+| Coverage                     | ❌ No                         | Coverage excludes third-party code by design           |
+| Valgrind                     | ❌ No                         | Valgrind instruments at runtime, not compile time      |
+| **AddressSanitizer**         | ✅ Yes                        | All code must be instrumented for reliable detection   |
+| **ThreadSanitizer**          | ✅ Yes                        | Uninstrumented code causes false negatives             |
+| **MemorySanitizer**          | ✅ **Critical**               | Uninstrumented code causes massive false positives     |
+| **UndefinedBehaviorSanitizer** | ⚠️ Recommended              | UB in third-party code won't be caught otherwise       |
+
+### Solution: Per-Variant Third-Party Builds
+
+Build third_party with separate install prefixes — one for default builds, and
+one for each sanitizer:
+
+```
+build/
+ ├── third_party/install/          ← Debug, Release, Coverage, Valgrind
+ ├── third_party-asan/install/     ← AddressSanitizer
+ ├── third_party-tsan/install/     ← ThreadSanitizer
+ ├── third_party-msan/install/     ← MemorySanitizer
+ └── third_party-ubsan/install/    ← UndefinedBehaviorSanitizer
+```
+
+Example — building third_party with AddressSanitizer:
+
+```bash
+cmake -S third_party -B build/third_party-asan -G Ninja \
+      -DCMAKE_INSTALL_PREFIX=$PWD/build/third_party-asan/install \
+      -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+      -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+      -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" \
+      -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address"
+cmake --build build/third_party-asan --target install
+```
+
+Then point the main project at the matching install:
+
+```bash
+cmake -S . -B build/asan -G Ninja \
+      -DCMAKE_BUILD_TYPE=AddressSanitizer \
+      -DTHIRD_PARTY_INSTALL_DIR=$PWD/build/third_party-asan/install
+```
+
+### Automation with Make
+
+A `Makefile` in the project root automates the full dependency chain. Each
+application target depends on the matching third_party variant — Make only
+rebuilds third_party when the stamp file is missing:
+
+```
+make test-asan
+  └── asan                         (build app with ASan)
+       └── third-party-asan        (build third_party with ASan, if needed)
+```
+
+Common commands:
+
+```bash
+make debug          # Build debug (auto-builds default third_party)
+make asan           # Build ASan  (auto-builds ASan third_party)
+make test-debug     # Build + run debug tests
+make test-asan      # Build + run ASan tests
+make clean          # Remove all build artifacts
+make help           # Show all available targets
+```
+
+See `Makefile` for the full list of targets and configuration options.
 
 ---
 
