@@ -49,8 +49,33 @@ Turn the `third_party` directory into an independent CMake project.
 third_party/
  ├── CMakeLists.txt
  ├── third_partyConfig.cmake.in
- └── downloads/
+ ├── downloads/          ← cached archive tarballs
+ └── src/                ← extracted / tracked source trees
 ```
+
+### Source Management Strategy
+
+The `third_party/` directory uses a **two-tier source management** approach:
+
+| Directory              | Purpose                                                        | Tracked in Git? |
+| ---------------------- | -------------------------------------------------------------- | ---------------- |
+| `third_party/src/`     | Extracted source trees — allows local modifications and review | ✅ Yes           |
+| `third_party/downloads/` | Original archive tarballs used as a fallback                 | ✅ Yes           |
+
+**How it works:**
+
+1. If `third_party/src/<name>-src/` exists, the build uses it directly.
+2. If the source directory is missing, the build extracts it from the cached
+   archive in `third_party/downloads/`.
+3. If the archive is also missing, it is downloaded from the upstream URL.
+
+**Why track sources in git?**
+
+* **Resilience** — if an upstream repository or release is temporarily or
+  permanently unavailable, the project still builds.
+* **Reproducibility** — the exact source used is pinned in version control.
+* **Modifiability** — local patches to third-party code are tracked and
+  reviewable in the normal git workflow.
 
 ---
 
@@ -258,7 +283,6 @@ verification.
 
 * Using `FetchContent` in the main project
 * Mixing third-party and application builds
-* Storing fetched sources inside the source tree without `.gitignore` coverage
 
 ### Don't Forget
 
