@@ -26,8 +26,8 @@ function(setup_gtest_executable TARGET_NAME)
 
     target_link_libraries(${TARGET_NAME}
         PRIVATE
-            gtest
-            gmock
+            third_party::gtest
+            third_party::gmock
             ${ARG_LIBRARIES}
     )
 

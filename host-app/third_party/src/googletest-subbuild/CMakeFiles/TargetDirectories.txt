@@ -1,0 +1,3 @@
+/workspace/host-app/third_party/src/googletest-subbuild/CMakeFiles/googletest-populate.dir
+/workspace/host-app/third_party/src/googletest-subbuild/CMakeFiles/edit_cache.dir
+/workspace/host-app/third_party/src/googletest-subbuild/CMakeFiles/rebuild_cache.dir

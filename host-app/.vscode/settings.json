@@ -4,7 +4,7 @@
     // =========================
 
     // Directory where CMake will place build files
-    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.buildDirectory": "${workspaceFolder}/build/host-app",
     //"cmake.buildDirectory": "/tmp/build",
 
     // Automatically run CMake configure when opening the folder
@@ -23,7 +23,7 @@
     "cmake.buildArgs": [], // optional extra args for build
 
     // Directory where CMake will install files (if used)
-    "cmake.installPrefix": "${workspaceFolder}/install",
+    "cmake.installPrefix": "${workspaceFolder}/build/host-app/install",
     //"cmake.installPrefix": "/tmp/install",
 
     // Number of parallel jobs for building
