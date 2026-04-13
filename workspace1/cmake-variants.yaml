@@ -1,0 +1,35 @@
+buildType:
+  default: debug
+  choices:
+    debug:
+      short: Debug
+      long: Debug build (no optimization, with debug symbols)
+      buildType: Debug
+    release:
+      short: Release
+      long: Release build (optimized, no debug symbols)
+      buildType: Release
+    coverage:
+      short: Coverage
+      long: Coverage build for gcov analysis
+      buildType: Coverage
+    valgrind:
+      short: Valgrind
+      long: Debug build suitable for memory checking with Valgrind
+      buildType: Valgrind
+    addresssanitizer:
+      short: ASan
+      long: Debug build with AddressSanitizer enabled
+      buildType: AddressSanitizer
+    threadsanitizer:
+      short: TSan
+      long: Debug build with ThreadSanitizer enabled
+      buildType: ThreadSanitizer
+    memorysanitizer:
+      short: MSan
+      long: Debug build with MemorySanitizer enabled
+      buildType: MemorySanitizer
+    undefinedbehaviorsanitizer:
+      short: UBSan
+      long: Debug build with UndefinedBehaviorSanitizer enabled
+      buildType: UndefinedBehaviorSanitizer

@@ -34,7 +34,17 @@
             ],
             "settings": {
                 "files.eol": "\n",
-                "cmake.enableCTest": false
+                "cmake.enableCTest": false,
+                // In the Podman devcontainer, use container-local build/install directories instead of /workspace.
+                // The bind-mounted workspace may not reliably support executable build/test artifacts.
+                // These machine-level settings apply only when no workspace-folder override exists in .vscode/settings.json.
+                "cmake.buildDirectory": "/tmp/build",
+                "cmake.installPrefix": "/tmp/install",
+                "testMate.cpp.test.advancedExecutables": [
+                    {
+                        "pattern": "/tmp/build/tests/*"
+                    }
+                ]
             }
         }
     },

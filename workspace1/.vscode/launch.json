@@ -1,0 +1,50 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug C/C++",
+
+            // Debugger type: cppdbg for GDB/LLDB, cppvsdbg for Visual Studio debugger
+            "type": "cppdbg",
+
+            // Request type: launch (start new process) or attach (attach to running process)
+            "request": "launch",
+
+            // Path to the program to debug (from CMake Tools)
+            "program": "${command:cmake.launchTargetPath}",
+
+            // Arguments passed to the program
+            "args": [],
+
+            // Stop at program entry point
+            "stopAtEntry": false,
+
+            // Working directory for the program
+            "cwd": "${command:cmake.buildDirectory}",
+
+            // Platform-specific debugger configuration
+            // GDB for Linux, Visual Studio debugger for Windows
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+
+            // Setup commands for GDB (pretty-printing for better variable display)
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+
+            // Windows-specific overrides: use Visual Studio debugger
+            "windows": {
+                "type": "cppvsdbg"
+            },
+
+            // Linux-specific overrides (optional, for clarity)
+            "linux": {
+                "miDebuggerPath": "/usr/bin/gdb"
+            }
+        }
+    ]
+}
