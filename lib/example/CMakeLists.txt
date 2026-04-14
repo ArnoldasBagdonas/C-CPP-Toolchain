@@ -21,8 +21,9 @@ target_include_directories(libexample
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Apply compiler flags for build type (Debug/Release/Coverage/Valgrind)
+if(COMMAND set_target_flags)
 set_target_flags(libexample)
+endif()
 
 # Optional dependencies
 # target_link_libraries(libexample
