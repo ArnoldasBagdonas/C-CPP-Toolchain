@@ -1,2 +1,5 @@
 # Build directory
 build/
+
+# User-specific CMake preset overrides (e.g. devcontainer paths)
+CMakeUserPresets.json

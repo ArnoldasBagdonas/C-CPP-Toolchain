@@ -86,14 +86,7 @@ function(set_target_flags target)
             message(FATAL_ERROR "AddressSanitizer requires clang-cl or GCC")
         endif()
 
-        target_compile_options(${target} PRIVATE
-            -O0
-            -fsanitize=address
-            -fno-omit-frame-pointer
-        )
-        target_link_options(${target} PRIVATE
-            -fsanitize=address
-        )
+        target_compile_options(${target} PRIVATE -O0)
 
     # -------------------------------------------------------------------------
     # THREAD SANITIZER
@@ -105,14 +98,7 @@ function(set_target_flags target)
 
         find_package(Threads REQUIRED)
 
-        target_compile_options(${target} PRIVATE
-            -O1
-            -fsanitize=thread
-            -fno-omit-frame-pointer
-        )
-        target_link_options(${target} PRIVATE
-            -fsanitize=thread
-        )
+        target_compile_options(${target} PRIVATE -O1)
         target_link_libraries(${target} PRIVATE Threads::Threads)
 
     # -------------------------------------------------------------------------
@@ -123,48 +109,17 @@ function(set_target_flags target)
             message(FATAL_ERROR "MemorySanitizer requires Clang")
         endif()
 
-        target_compile_options(${target} PRIVATE
-            -O1
-            -fsanitize=memory
-            -fno-omit-frame-pointer
-        )
-        target_link_options(${target} PRIVATE
-            -fsanitize=memory
-        )
+        target_compile_options(${target} PRIVATE -O1)
 
     # -------------------------------------------------------------------------
     # UNDEFINED BEHAVIOR SANITIZER
     # -------------------------------------------------------------------------
     elseif(BUILD_ID STREQUAL "UNDEFINEDBEHAVIORSANITIZER")
-        set(UBSAN_FLAGS
-            -fsanitize=undefined
-            -fsanitize=shift
-            -fsanitize=integer-divide-by-zero
-            -fsanitize=unreachable
-            -fsanitize=vla-bound
-            -fsanitize=null
-            -fsanitize=return
-            -fsanitize=signed-integer-overflow
-            -fsanitize=bounds
-            -fsanitize=alignment
-            -fsanitize=float-divide-by-zero
-            -fsanitize=float-cast-overflow
-            -fsanitize=nonnull-attribute
-            -fsanitize=returns-nonnull-attribute
-            -fsanitize=bool
-            -fsanitize=enum
-            -fsanitize=vptr
-        )
-
         target_compile_options(${target} PRIVATE
             -O0
-            ${UBSAN_FLAGS}
             -fno-sanitize-recover=all
-            -fno-omit-frame-pointer
         )
-
         target_link_options(${target} PRIVATE
-            ${UBSAN_FLAGS}
             -fno-sanitize-recover=all
         )
 

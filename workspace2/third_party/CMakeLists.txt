@@ -19,7 +19,7 @@
 #     third_party::gtest_main
 # )
 
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.25)
 project(third_party LANGUAGES CXX)
 
 include(FetchContent)
@@ -32,6 +32,10 @@ cmake_policy(SET CMP0135 NEW)
 # Global configuration
 # ------------------------------------------------------------------------------
 
+# Source extraction goes to the source tree (committed to git).
+# FETCHCONTENT_BASE_DIR controls where FetchContent puts <name>-src.
+# BINARY_DIR and SUBBUILD_DIR are overridden per-dependency (see add_third_party)
+# so that build artifacts stay in CMAKE_BINARY_DIR, not the source tree.
 set(FETCHCONTENT_BASE_DIR ${CMAKE_CURRENT_LIST_DIR}/src)
 set(FETCHCONTENT_QUIET OFF)
 
@@ -82,7 +86,9 @@ function(add_third_party name)
         message(STATUS "${name}: using local source ${SRC_DIR}")
 
         FetchContent_Declare(${name}
-            SOURCE_DIR ${SRC_DIR}
+            SOURCE_DIR   ${SRC_DIR}
+            BINARY_DIR   ${CMAKE_BINARY_DIR}/${name}-build
+            SUBBUILD_DIR ${CMAKE_BINARY_DIR}/${name}-subbuild
         )
     else()
         if (NOT ARG_VERSION OR NOT ARG_URL)
@@ -95,7 +101,9 @@ function(add_third_party name)
         download_if_missing(${name} ${ARCHIVE_PATH} ${ARG_URL})
 
         FetchContent_Declare(${name}
-            URL file://${ARCHIVE_PATH}
+            URL          file://${ARCHIVE_PATH}
+            BINARY_DIR   ${CMAKE_BINARY_DIR}/${name}-build
+            SUBBUILD_DIR ${CMAKE_BINARY_DIR}/${name}-subbuild
         )
     endif()
 

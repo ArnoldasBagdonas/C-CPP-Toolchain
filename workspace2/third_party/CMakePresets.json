@@ -1,0 +1,129 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 25,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "$penv{BUILD_ROOT}/third_party/${presetName}",
+            "installDir": "$penv{BUILD_ROOT}/third_party/${presetName}/install",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "gcc-default",
+            "inherits": "base",
+            "displayName": "GCC — Default",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
+            "name": "gcc-asan",
+            "inherits": "base",
+            "displayName": "GCC — AddressSanitizer",
+            "toolchainFile": "${sourceDir}/../cmake/toolchains/asan.cmake",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
+            "name": "gcc-tsan",
+            "inherits": "base",
+            "displayName": "GCC — ThreadSanitizer",
+            "toolchainFile": "${sourceDir}/../cmake/toolchains/tsan.cmake",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
+            "name": "gcc-ubsan",
+            "inherits": "base",
+            "displayName": "GCC — UndefinedBehaviorSanitizer",
+            "toolchainFile": "${sourceDir}/../cmake/toolchains/ubsan.cmake",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
+            "name": "clang-default",
+            "inherits": "base",
+            "displayName": "Clang — Default",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
+            }
+        },
+        {
+            "name": "clang-asan",
+            "inherits": "base",
+            "displayName": "Clang — AddressSanitizer",
+            "toolchainFile": "${sourceDir}/../cmake/toolchains/asan.cmake",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
+            }
+        },
+        {
+            "name": "clang-tsan",
+            "inherits": "base",
+            "displayName": "Clang — ThreadSanitizer",
+            "toolchainFile": "${sourceDir}/../cmake/toolchains/tsan.cmake",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
+            }
+        },
+        {
+            "name": "clang-msan",
+            "inherits": "base",
+            "displayName": "Clang — MemorySanitizer",
+            "toolchainFile": "${sourceDir}/../cmake/toolchains/msan.cmake",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
+            }
+        },
+        {
+            "name": "clang-ubsan",
+            "inherits": "base",
+            "displayName": "Clang — UndefinedBehaviorSanitizer",
+            "toolchainFile": "${sourceDir}/../cmake/toolchains/ubsan.cmake",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
+            }
+        },
+        {
+            "name": "msvc-default",
+            "inherits": "base",
+            "displayName": "MSVC — Default",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "cl",
+                "CMAKE_CXX_COMPILER": "cl"
+            }
+        }
+    ],
+    "buildPresets": [
+        { "name": "gcc-default",  "configurePreset": "gcc-default",  "targets": ["install"] },
+        { "name": "gcc-asan",     "configurePreset": "gcc-asan",     "targets": ["install"] },
+        { "name": "gcc-tsan",     "configurePreset": "gcc-tsan",     "targets": ["install"] },
+        { "name": "gcc-ubsan",    "configurePreset": "gcc-ubsan",    "targets": ["install"] },
+        { "name": "clang-default","configurePreset": "clang-default","targets": ["install"] },
+        { "name": "clang-asan",   "configurePreset": "clang-asan",   "targets": ["install"] },
+        { "name": "clang-tsan",   "configurePreset": "clang-tsan",   "targets": ["install"] },
+        { "name": "clang-msan",   "configurePreset": "clang-msan",   "targets": ["install"] },
+        { "name": "clang-ubsan",  "configurePreset": "clang-ubsan",  "targets": ["install"] },
+        { "name": "msvc-default", "configurePreset": "msvc-default", "targets": ["install"] }
+    ]
+}

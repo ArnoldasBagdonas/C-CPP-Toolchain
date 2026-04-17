@@ -133,6 +133,9 @@ RUN wget -q https://apt.llvm.org/llvm.sh && \
     ./llvm.sh ${CLANG_VER} all && \
     rm llvm.sh && \
     ln -sf /usr/bin/clang-${CLANG_VER} /usr/bin/clang && \
+    ln -sf /usr/bin/clang++-${CLANG_VER} /usr/bin/clang++ && \
+    ln -sf /usr/bin/clang-cpp-${CLANG_VER} /usr/bin/clang-cpp && \
+    ln -sf /usr/bin/clangd-${CLANG_VER} /usr/bin/clangd && \
     ln -sf /usr/bin/clang-tidy-${CLANG_VER} /usr/bin/clang-tidy && \
     ln -sf /usr/bin/clang-format-${CLANG_VER} /usr/bin/clang-format && \
     ln -sf /usr/bin/scan-build-${CLANG_VER} /usr/bin/scan-build && \

@@ -4,6 +4,11 @@
     "build": {
         "dockerfile": "Dockerfile"
     },
+    
+    "remoteEnv": {
+        "PODMAN_USERNS": "keep-id", // Podman-specific settings for Dev Containers
+        "BUILD_ROOT": "/tmp/build" // Centralized build directory for all CMake builds
+    },
 
     "customizations": {
         "vscode": {
@@ -35,14 +40,13 @@
             "settings": {
                 "files.eol": "\n",
                 "cmake.enableCTest": false,
-                // In the Podman devcontainer, use container-local build/install directories instead of /workspace.
-                // The bind-mounted workspace may not reliably support executable build/test artifacts.
-                // These machine-level settings apply only when no workspace-folder override exists in .vscode/settings.json.
-                "cmake.buildDirectory": "/tmp/build",
-                "cmake.installPrefix": "/tmp/install",
+                // Build path derived from BUILD_ROOT env var (defined in remoteEnv above).
+                // remoteEnv.BUILD_ROOT is the single source of truth for all build tooling.
+                "cmake.buildDirectory": "${env:BUILD_ROOT}",
+                "cmake.installPrefix": "${env:BUILD_ROOT}/install",
                 "testMate.cpp.test.advancedExecutables": [
                     {
-                        "pattern": "/tmp/build/tests/*"
+                        "pattern": "${env:BUILD_ROOT}/**/tests/*"
                     }
                 ]
             }
@@ -58,12 +62,5 @@
     "workspaceFolder": "/workspace",
 
     "remoteUser": "vscode",
-    // Podman-specific settings for Dev Containers
-    "remoteEnv": {
-        "PODMAN_USERNS": "keep-id"
-    },
-    "containerUser": "vscode",
-    // Normalize line endings to Unix (LF) for all source and script files after container creation.
-    // This ensures consistency and prevents issues caused by Windows (CRLF) endings in .cpp, .h, .c, .hpp, .txt, and .sh files.
-    //"postCreateCommand": "find . -type f \\( -name \"*.cpp\" -o -name \"*.h\" -o -name \"*.c\" -o -name \"*.hpp\" -o -name \"*.txt\" -o -name \"*.sh\" \\) -exec sed -i 's/\\r$//' {} +"
+    "containerUser": "vscode"
 }

@@ -1,0 +1,322 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 25,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "$penv{BUILD_ROOT}/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+
+        {
+            "name": "gcc-base",
+            "hidden": true,
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
+            "name": "clang-base",
+            "hidden": true,
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
+            }
+        },
+        {
+            "name": "msvc-base",
+            "hidden": true,
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "cl",
+                "CMAKE_CXX_COMPILER": "cl"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+
+        {
+            "name": "debug-base",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "release-base",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "coverage-base",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Coverage"
+            }
+        },
+        {
+            "name": "valgrind-base",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Valgrind"
+            }
+        },
+        {
+            "name": "asan-base",
+            "hidden": true,
+            "toolchainFile": "${sourceDir}/cmake/toolchains/asan.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "AddressSanitizer"
+            }
+        },
+        {
+            "name": "tsan-base",
+            "hidden": true,
+            "toolchainFile": "${sourceDir}/cmake/toolchains/tsan.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "ThreadSanitizer"
+            }
+        },
+        {
+            "name": "msan-base",
+            "hidden": true,
+            "toolchainFile": "${sourceDir}/cmake/toolchains/msan.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MemorySanitizer"
+            }
+        },
+        {
+            "name": "ubsan-base",
+            "hidden": true,
+            "toolchainFile": "${sourceDir}/cmake/toolchains/ubsan.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "UndefinedBehaviorSanitizer"
+            }
+        },
+
+        {
+            "name": "gcc-debug",
+            "inherits": ["gcc-base", "debug-base"],
+            "displayName": "GCC Debug"
+        },
+        {
+            "name": "gcc-release",
+            "inherits": ["gcc-base", "release-base"],
+            "displayName": "GCC Release"
+        },
+        {
+            "name": "gcc-coverage",
+            "inherits": ["gcc-base", "coverage-base"],
+            "displayName": "GCC Coverage"
+        },
+        {
+            "name": "gcc-valgrind",
+            "inherits": ["gcc-base", "valgrind-base"],
+            "displayName": "GCC Valgrind"
+        },
+        {
+            "name": "gcc-asan",
+            "inherits": ["gcc-base", "asan-base"],
+            "displayName": "GCC AddressSanitizer"
+        },
+        {
+            "name": "gcc-tsan",
+            "inherits": ["gcc-base", "tsan-base"],
+            "displayName": "GCC ThreadSanitizer"
+        },
+        {
+            "name": "gcc-ubsan",
+            "inherits": ["gcc-base", "ubsan-base"],
+            "displayName": "GCC UndefinedBehaviorSanitizer"
+        },
+
+        {
+            "name": "clang-debug",
+            "inherits": ["clang-base", "debug-base"],
+            "displayName": "Clang Debug"
+        },
+        {
+            "name": "clang-release",
+            "inherits": ["clang-base", "release-base"],
+            "displayName": "Clang Release"
+        },
+        {
+            "name": "clang-coverage",
+            "inherits": ["clang-base", "coverage-base"],
+            "displayName": "Clang Coverage"
+        },
+        {
+            "name": "clang-valgrind",
+            "inherits": ["clang-base", "valgrind-base"],
+            "displayName": "Clang Valgrind"
+        },
+        {
+            "name": "clang-asan",
+            "inherits": ["clang-base", "asan-base"],
+            "displayName": "Clang AddressSanitizer"
+        },
+        {
+            "name": "clang-tsan",
+            "inherits": ["clang-base", "tsan-base"],
+            "displayName": "Clang ThreadSanitizer"
+        },
+        {
+            "name": "clang-msan",
+            "inherits": ["clang-base", "msan-base"],
+            "displayName": "Clang MemorySanitizer"
+        },
+        {
+            "name": "clang-ubsan",
+            "inherits": ["clang-base", "ubsan-base"],
+            "displayName": "Clang UndefinedBehaviorSanitizer"
+        },
+
+        {
+            "name": "msvc-debug",
+            "inherits": ["msvc-base", "debug-base"],
+            "displayName": "MSVC Debug"
+        },
+        {
+            "name": "msvc-release",
+            "inherits": ["msvc-base", "release-base"],
+            "displayName": "MSVC Release"
+        }
+    ],
+    "buildPresets": [
+        { "name": "gcc-debug",       "configurePreset": "gcc-debug"       },
+        { "name": "gcc-release",     "configurePreset": "gcc-release"     },
+        { "name": "gcc-coverage",    "configurePreset": "gcc-coverage"    },
+        { "name": "gcc-valgrind",    "configurePreset": "gcc-valgrind"    },
+        { "name": "gcc-asan",        "configurePreset": "gcc-asan"        },
+        { "name": "gcc-tsan",        "configurePreset": "gcc-tsan"        },
+        { "name": "gcc-ubsan",       "configurePreset": "gcc-ubsan"       },
+        { "name": "clang-debug",     "configurePreset": "clang-debug"     },
+        { "name": "clang-release",   "configurePreset": "clang-release"   },
+        { "name": "clang-coverage",  "configurePreset": "clang-coverage"  },
+        { "name": "clang-valgrind",  "configurePreset": "clang-valgrind"  },
+        { "name": "clang-asan",      "configurePreset": "clang-asan"      },
+        { "name": "clang-tsan",      "configurePreset": "clang-tsan"      },
+        { "name": "clang-msan",      "configurePreset": "clang-msan"      },
+        { "name": "clang-ubsan",     "configurePreset": "clang-ubsan"     },
+        { "name": "msvc-debug",      "configurePreset": "msvc-debug"      },
+        { "name": "msvc-release",    "configurePreset": "msvc-release"    }
+    ],
+    "testPresets": [
+        {
+            "name": "gcc-debug",
+            "configurePreset": "gcc-debug",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "gcc-release",
+            "configurePreset": "gcc-release",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "gcc-coverage",
+            "configurePreset": "gcc-coverage",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "gcc-valgrind",
+            "configurePreset": "gcc-valgrind",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "gcc-asan",
+            "configurePreset": "gcc-asan",
+            "output": { "outputOnFailure": true },
+            "environment": {
+                "ASAN_OPTIONS": "abort_on_error=1:exitcode=42:detect_leaks=1:detect_invalid_pointer_pairs=1:detect_stack_use_after_return=1"
+            }
+        },
+        {
+            "name": "gcc-tsan",
+            "configurePreset": "gcc-tsan",
+            "output": { "outputOnFailure": true },
+            "environment": {
+                "TSAN_OPTIONS": "halt_on_error=1:exitcode=42"
+            }
+        },
+        {
+            "name": "gcc-ubsan",
+            "configurePreset": "gcc-ubsan",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "clang-debug",
+            "configurePreset": "clang-debug",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "clang-release",
+            "configurePreset": "clang-release",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "clang-coverage",
+            "configurePreset": "clang-coverage",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "clang-valgrind",
+            "configurePreset": "clang-valgrind",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "clang-asan",
+            "configurePreset": "clang-asan",
+            "output": { "outputOnFailure": true },
+            "environment": {
+                "ASAN_OPTIONS": "abort_on_error=1:exitcode=42:detect_leaks=1:detect_invalid_pointer_pairs=1:detect_stack_use_after_return=1"
+            }
+        },
+        {
+            "name": "clang-tsan",
+            "configurePreset": "clang-tsan",
+            "output": { "outputOnFailure": true },
+            "environment": {
+                "TSAN_OPTIONS": "halt_on_error=1:exitcode=42"
+            }
+        },
+        {
+            "name": "clang-msan",
+            "configurePreset": "clang-msan",
+            "output": { "outputOnFailure": true },
+            "environment": {
+                "MSAN_OPTIONS": "abort_on_error=1:exitcode=42"
+            }
+        },
+        {
+            "name": "clang-ubsan",
+            "configurePreset": "clang-ubsan",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "msvc-debug",
+            "configurePreset": "msvc-debug",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "msvc-release",
+            "configurePreset": "msvc-release",
+            "output": { "outputOnFailure": true }
+        }
+    ]
+}
