@@ -3,9 +3,12 @@
     // CMake Tools configuration
     // =========================
 
-    // Directory where CMake will place build files
-    "cmake.buildDirectory": "${workspaceFolder}/build",
-    //"cmake.buildDirectory": "/tmp/build",
+    // NOTE: cmake.buildDirectory, cmake.installPrefix, and testMate paths are NOT set here.
+    // - On Windows host: CMake Tools defaults to ${workspaceFolder}/build, which is correct.
+    // - In devcontainer: These are overridden to /tmp/build in .devcontainer/devcontainer.json
+    //   because the Podman bind-mounted workspace may not reliably support executable artifacts.
+    //   Workspace-folder settings (.vscode/settings.json) take precedence over devcontainer.json
+    //   machine-level settings, so they must be omitted here for the override to work.
 
     // Automatically run CMake configure when opening the folder
     "cmake.configureOnOpen": true,
@@ -22,10 +25,6 @@
     // Extra arguments to pass to CMake during build
     "cmake.buildArgs": [], // optional extra args for build
 
-    // Directory where CMake will install files (if used)
-    "cmake.installPrefix": "${workspaceFolder}/install",
-    //"cmake.installPrefix": "/tmp/install",
-
     // Number of parallel jobs for building
     "cmake.parallelJobs": 0, // auto-detect number of CPU cores
 
@@ -34,19 +33,6 @@
         "MIMode": "gdb", // Debugger mode (gdb for GNU Debugger)
         "miDebuggerPath": "/usr/bin/gdb" // Path to gdb executable
     },
-
-    // =========================
-    // TestMate C++ Test Adapter
-    // =========================
-
-    // List of advanced test executables for TestMate
-    "testMate.cpp.test.advancedExecutables": [
-        {
-            // Pattern to match test executables (adjust as needed)
-            "pattern": "${workspaceFolder}/build/tests/*",
-            //"pattern": "/tmp/build/tests/*",
-        }
-    ],
 
     // =========================
     // Dev Containers (Podman)

@@ -7,7 +7,12 @@
     
     "remoteEnv": {
         "PODMAN_USERNS": "keep-id", // Podman-specific settings for Dev Containers
-        "BUILD_ROOT": "/tmp/build" // Centralized build directory for all CMake builds
+        // Centralized build directory — single source of truth.
+        // If you change this path, update it in 3 places below:
+        //   1. cmake.buildDirectory / cmake.installPrefix
+        //   2. testMate.cpp.test.advancedExecutables patterns
+        //   3. postCreateCommand
+        "BUILD_ROOT": "/tmp/build"
     },
 
     "customizations": {
@@ -40,13 +45,15 @@
             "settings": {
                 "files.eol": "\n",
                 "cmake.enableCTest": false,
-                // Build path derived from BUILD_ROOT env var (defined in remoteEnv above).
-                // remoteEnv.BUILD_ROOT is the single source of truth for all build tooling.
-                "cmake.buildDirectory": "${env:BUILD_ROOT}",
-                "cmake.installPrefix": "${env:BUILD_ROOT}/install",
+                // Build path — keep in sync with remoteEnv.BUILD_ROOT above.
+                "cmake.buildDirectory": "/tmp/build",
+                "cmake.installPrefix": "/tmp/build/install",
                 "testMate.cpp.test.advancedExecutables": [
                     {
-                        "pattern": "${env:BUILD_ROOT}/**/tests/*"
+                        "pattern": "/tmp/build/**/tests/*"
+                    },
+                    {
+                        "pattern": "/workspace/build/**/tests/*"
                     }
                 ]
             }
@@ -60,6 +67,9 @@
 
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
     "workspaceFolder": "/workspace",
+
+    // Ensure build dir exists — keep in sync with remoteEnv.BUILD_ROOT above.
+    "postCreateCommand": "mkdir -p /tmp/build",
 
     "remoteUser": "vscode",
     "containerUser": "vscode"
