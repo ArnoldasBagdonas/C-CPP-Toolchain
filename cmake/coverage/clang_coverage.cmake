@@ -3,6 +3,7 @@
 function(add_clang_coverage_report_target COVERAGE_TEST_TARGET)
     set(COVERAGE_HTML_DIR "${CMAKE_BINARY_DIR}/coverage_html")
     set(COVERAGE_DATA_CLANG "${CMAKE_BINARY_DIR}/coverage.profdata")
+    set(COVERAGE_REPORT_DIR "${CMAKE_SOURCE_DIR}/build/coverage_report")
 
     add_custom_target(coverage_report
         COMMENT "Generating Clang/LLVM code coverage report..."
@@ -33,6 +34,7 @@ function(add_clang_coverage_report_target COVERAGE_TEST_TARGET)
 
     add_custom_command(
         TARGET coverage_report POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory ${COVERAGE_REPORT_DIR}
         COMMAND llvm-profdata merge -sparse ${CMAKE_BINARY_DIR}/coverage_*.profraw -o ${COVERAGE_DATA_CLANG}
         COMMAND llvm-cov show
             $<TARGET_FILE:${MAIN_TEST_TARGET}>
@@ -40,6 +42,8 @@ function(add_clang_coverage_report_target COVERAGE_TEST_TARGET)
             -format=html
             -output-dir=${COVERAGE_HTML_DIR}
             -ignore-filename-regex='/usr/.*|.*googletest.*'
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${COVERAGE_REPORT_DIR}
+        COMMAND /bin/sh -c "cp -r ${COVERAGE_HTML_DIR}/. ${COVERAGE_REPORT_DIR}"
         COMMENT "Generating LLVM HTML coverage report..."
     )
 

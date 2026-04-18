@@ -16,6 +16,7 @@ function(add_msvc_coverage_report_target COVERAGE_TEST_TARGET)
 
     file(TO_NATIVE_PATH "${CMAKE_SOURCE_DIR}" COVERAGE_SOURCE_DIR_WIN)
     file(TO_NATIVE_PATH "${CMAKE_BINARY_DIR}/coverage_html" COVERAGE_HTML_DIR_WIN)
+    file(TO_NATIVE_PATH "${CMAKE_SOURCE_DIR}/build/coverage_report" COVERAGE_REPORT_DIR_WIN)
 
     # Use the first test target for coverage (assume main test binary)
     if(COVERAGE_TEST_TARGET)
@@ -48,6 +49,7 @@ function(add_msvc_coverage_report_target COVERAGE_TEST_TARGET)
 
     add_custom_command(
         TARGET coverage_report POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${COVERAGE_REPORT_DIR_WIN}"
         COMMAND
             "${OPENCPPCOVERAGE_EXE}"
                 --export_type=html:"${COVERAGE_HTML_DIR_WIN}"
@@ -55,7 +57,8 @@ function(add_msvc_coverage_report_target COVERAGE_TEST_TARGET)
                 ${_extra_sources_args}
                 --
                 "${UNIT_TESTS_EXE_WIN}"
-        COMMENT "Running unit tests with OpenCppCoverage..."
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${COVERAGE_HTML_DIR_WIN}" "${COVERAGE_REPORT_DIR_WIN}"
+        COMMENT "Generating MSVC HTML coverage report and copying to workspace build folder..."
     )
 
     if(COVERAGE_TEST_TARGET)

@@ -5,6 +5,7 @@
 function(add_gcc_coverage_report_target COVERAGE_TEST_TARGET)
     set(COVERAGE_HTML_DIR "${CMAKE_BINARY_DIR}/coverage_html")
     set(COVERAGE_DATA_GCC "${CMAKE_BINARY_DIR}/coverage.info")
+    set(COVERAGE_REPORT_DIR "${CMAKE_SOURCE_DIR}/build/coverage_report")
 
     add_custom_target(coverage_report
         COMMENT "Generating GCC code coverage report..."
@@ -26,8 +27,11 @@ function(add_gcc_coverage_report_target COVERAGE_TEST_TARGET)
 
     add_custom_command(
         TARGET coverage_report POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory ${COVERAGE_REPORT_DIR}
         COMMAND lcov --capture --directory ${CMAKE_BINARY_DIR} --output-file ${COVERAGE_DATA_GCC}
         COMMAND genhtml ${COVERAGE_DATA_GCC} --output-directory ${COVERAGE_HTML_DIR}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${COVERAGE_REPORT_DIR}
+        COMMAND /bin/sh -c "cp -r ${COVERAGE_HTML_DIR}/. ${COVERAGE_REPORT_DIR}"
         COMMENT "Generating GCC HTML coverage report..."
     )
 
