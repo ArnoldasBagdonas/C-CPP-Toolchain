@@ -10,8 +10,8 @@
             "name": "base",
             "hidden": true,
             "generator": "Ninja",
-            "binaryDir": "$penv{BUILD_ROOT}/third_party/${presetName}",
-            "installDir": "$penv{BUILD_ROOT}/third_party/${presetName}/install",
+            "binaryDir": "$penv{BUILD_ROOT}/workspace2/third_party/${presetName}",
+            "installDir": "$penv{BUILD_ROOT}/workspace2/third_party/${presetName}/install",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }

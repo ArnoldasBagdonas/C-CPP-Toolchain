@@ -23,7 +23,7 @@ ifndef BUILD_ROOT
     $(error BUILD_ROOT is not set. It should be defined in .devcontainer/devcontainer.json remoteEnv)
 endif
 TP_SRC     := third_party
-TP_DIR     := $(BUILD_ROOT)/third_party
+TP_DIR     := $(BUILD_ROOT)/workspace2/third_party
 
 # Detect available compilers
 HAS_GCC   := $(shell command -v g++ 2>/dev/null)

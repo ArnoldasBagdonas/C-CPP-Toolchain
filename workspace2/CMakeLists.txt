@@ -87,7 +87,7 @@ if(NOT BUILD_ROOT)
 endif()
 
 set(THIRD_PARTY_INSTALL_DIR
-    "${BUILD_ROOT}/third_party/${_TP_COMPILER}-${_TP_VARIANT}/install"
+    "${BUILD_ROOT}/workspace2/third_party/${_TP_COMPILER}-${_TP_VARIANT}/install"
     CACHE PATH "Path to third_party install directory"
 )
 message(STATUS "Third-party install dir: ${THIRD_PARTY_INSTALL_DIR}")

@@ -5,8 +5,9 @@
 
     // NOTE: cmake.buildDirectory, cmake.installPrefix, and testMate paths are NOT set here.
     // - On Windows host: CMake Tools defaults to ${workspaceFolder}/build, which is correct.
-    // - In devcontainer: These are overridden to /tmp/build in .devcontainer/devcontainer.json
-    //   because the Podman bind-mounted workspace may not reliably support executable artifacts.
+    // - In devcontainer: These are overridden to /tmp/build/${workspaceFolderBasename} in
+    //   .devcontainer/devcontainer.json so each workspace folder in a multi-root workspace
+    //   gets its own isolated build tree.
     //   Workspace-folder settings (.vscode/settings.json) take precedence over devcontainer.json
     //   machine-level settings, so they must be omitted here for the override to work.
 

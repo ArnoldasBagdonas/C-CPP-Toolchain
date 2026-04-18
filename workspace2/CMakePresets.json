@@ -10,7 +10,7 @@
             "name": "base",
             "hidden": true,
             "generator": "Ninja",
-            "binaryDir": "$penv{BUILD_ROOT}/${presetName}",
+            "binaryDir": "$penv{BUILD_ROOT}/workspace2/${presetName}",
             "cacheVariables": {
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }

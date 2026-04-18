@@ -12,6 +12,8 @@
         //   1. cmake.buildDirectory / cmake.installPrefix
         //   2. testMate.cpp.test.advancedExecutables patterns
         //   3. postCreateCommand
+        // Each workspace folder gets its own subdirectory via ${workspaceFolderBasename}
+        // to prevent collisions in a multi-root workspace.
         "BUILD_ROOT": "/tmp/build"
     },
 
@@ -46,11 +48,13 @@
                 "files.eol": "\n",
                 "cmake.enableCTest": false,
                 // Build path — keep in sync with remoteEnv.BUILD_ROOT above.
-                "cmake.buildDirectory": "/tmp/build",
-                "cmake.installPrefix": "/tmp/build/install",
+                // ${workspaceFolderBasename} ensures each workspace folder in a
+                // multi-root workspace gets its own isolated build tree.
+                "cmake.buildDirectory": "/tmp/build/${workspaceFolderBasename}",
+                "cmake.installPrefix": "/tmp/build/${workspaceFolderBasename}/install",
                 "testMate.cpp.test.advancedExecutables": [
                     {
-                        "pattern": "/tmp/build/**/tests/*"
+                        "pattern": "/tmp/build/**/**/tests/*"
                     },
                     {
                         "pattern": "/workspace/build/**/tests/*"
