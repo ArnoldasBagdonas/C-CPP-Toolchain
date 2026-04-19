@@ -40,6 +40,7 @@
                 "jacqueslucke.gcov-viewer",
 
                 // Python
+                "ms-python.python",
                 "LittleFoxTeam.vscode-python-test-adapter",
 
                 "google.geminicodeassist"
