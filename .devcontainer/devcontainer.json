@@ -12,8 +12,8 @@
         //   1. cmake.buildDirectory / cmake.installPrefix
         //   2. testMate.cpp.test.advancedExecutables patterns
         //   3. postCreateCommand
-        // Each workspace folder gets its own subdirectory via ${workspaceFolderBasename}
-        // to prevent collisions in a multi-root workspace.
+        // Each workspace folder gets its own subdirectory via ${workspaceFolderBasename} (VS Code)
+        // or ${workspaceName} (TestMate) to prevent collisions in a multi-root workspace.
         "BUILD_ROOT": "/tmp/build"
     },
 
@@ -54,13 +54,38 @@
                 "cmake.buildDirectory": "/tmp/build/${workspaceFolderBasename}",
                 "cmake.installPrefix": "/tmp/build/${workspaceFolderBasename}/install",
                 "testMate.cpp.test.advancedExecutables": [
+                    // Out-of-source builds (cmake.buildDirectory → /tmp/build/)
                     {
-                        "pattern": "/tmp/build/**/**/tests/*"
+                        "pattern": "/tmp/build/workspace/**/tests/*",
+                        "name": "workspace: ${baseFilename}"
                     },
                     {
-                        "pattern": "/workspace/build/**/tests/*"
+                        "pattern": "/tmp/build/workspace1/**/tests/*",
+                        "name": "workspace1: ${baseFilename}"
+                    },
+                    {
+                        "pattern": "/tmp/build/workspace2/**/tests/*",
+                        "name": "workspace2: ${baseFilename}"
+                    },
+                    // In-tree builds (/workspace/**/build/)
+                    {
+                        "pattern": "/workspace/build/**/tests/*",
+                        "name": "workspace: ${baseFilename}"
+                    },
+                    {
+                        "pattern": "/workspace/workspace1/build/**/tests/*",
+                        "name": "workspace1: ${baseFilename}"
+                    },
+                    {
+                        "pattern": "/workspace/workspace2/build/**/tests/*",
+                        "name": "workspace2: ${baseFilename}"
                     }
-                ]
+                ],
+
+                // Python — interpreter points to the venv where pytest is installed.
+                // Set here (not in workspace settings.json) because the path is container-specific.
+                "python.defaultInterpreterPath": "/opt/venv/bin/python",
+                "pythonTestExplorer.testFramework": "pytest"
             }
         }
     },
